@@ -73,16 +73,10 @@ namespace Vix
         }
 
         template <typename... Args>
-        void logModule(const std::string &module, Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
-        {
-            log(level, "[{}] {}", module, fmt::vformat(fmtstr, fmt::make_format_args(std::forward<Args>(args)...)));
-        }
-
-        template <typename... Args>
         void logModule(const std::string &module, Level level,
-                       std::string_view fmtstr, Args &&...args)
+                       fmt::format_string<Args...> fmtstr, Args &&...args)
         {
-            log(level, "[{}] {}", module, fmt::vformat(fmtstr, fmt::make_format_args(args...)));
+            log(level, "[{}] {}", module, fmt::format(fmtstr, std::forward<Args>(args)...));
         }
 
         template <typename... Args>
