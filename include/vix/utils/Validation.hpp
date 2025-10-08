@@ -2,9 +2,13 @@
 #define VIX_VALIDATION_HPP
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <regex>
 #include <optional>
+#include <charconv> // from_chars
+#include <limits>
+
 #include "String.hpp"
 #include "Result.hpp"
 
@@ -15,8 +19,8 @@ namespace Vix::utils
     struct Rule
     {
         bool required = false;
-        std::optional<size_t> min_len{};
-        std::optional<size_t> max_len{};
+        std::optional<std::size_t> min_len{};
+        std::optional<std::size_t> max_len{};
         std::optional<long long> min{};
         std::optional<long long> max{};
         std::optional<std::regex> pattern{};
@@ -30,51 +34,82 @@ namespace Vix::utils
         const Schema &schema)
     {
         FieldErrors errs;
-        for (auto &[key, rule] : schema)
-        {
-            auto it = data.find(key);
-            auto present = (it != data.end() && !it->second.empty());
-            auto label = rule.label.empty() ? key : rule.label;
 
+        for (const auto &entry : schema)
+        {
+            const std::string &key = entry.first;
+            const Rule &rule = entry.second;
+
+            const auto it = data.find(key);
+            const bool present = (it != data.end() && !it->second.empty());
+            const std::string &label = rule.label.empty() ? key : rule.label;
+
+            // required ?
             if (rule.required && !present)
             {
-                errs[key] = label + " is required";
-                continue;
+                errs.emplace(key, label + " is required");
+                continue; // passe au champ suivant
             }
             if (!present)
                 continue;
 
-            const auto &v = it->second;
+            const std::string &v = it->second;
 
-            if (rule.min_len && v.size() < *rule.min_len)
-                errs[key] = label + " must be at least " + std::to_string(*rule.min_len) + " chars";
-            if (rule.max_len && v.size() > *rule.max_len)
-                errs[key] = label + " must be at most " + std::to_string(*rule.max_len) + " chars";
-
-            if (rule.min || rule.max)
+            // min_len / max_len
+            if (!v.empty())
             {
-                try
+                if (rule.min_len && v.size() < *rule.min_len)
                 {
-                    long long n = std::stoll(v);
-                    if (rule.min && n < *rule.min)
-                        errs[key] = label + " must be >= " + std::to_string(*rule.min);
-                    if (rule.max && n > *rule.max)
-                        errs[key] = label + " must be <= " + std::to_string(*rule.max);
+                    errs.emplace(key, label + " must be at least " + std::to_string(*rule.min_len) + " chars");
+                    continue;
                 }
-                catch (...)
+                if (rule.max_len && v.size() > *rule.max_len)
                 {
-                    errs[key] = label + " must be a number";
+                    errs.emplace(key, label + " must be at most " + std::to_string(*rule.max_len) + " chars");
+                    continue;
                 }
             }
 
+            // min/max numériques (base 10, sans lancer d'exceptions)
+            if (rule.min || rule.max)
+            {
+                long long n = 0;
+                const char *begin = v.data();
+                const char *end = v.data() + v.size();
+                auto [ptr, ec] = std::from_chars(begin, end, n, 10);
+
+                if (ec != std::errc{} || ptr != end)
+                {
+                    errs.emplace(key, label + " must be a number");
+                    continue;
+                }
+
+                if (rule.min && n < *rule.min)
+                {
+                    errs.emplace(key, label + " must be >= " + std::to_string(*rule.min));
+                    continue;
+                }
+                if (rule.max && n > *rule.max)
+                {
+                    errs.emplace(key, label + " must be <= " + std::to_string(*rule.max));
+                    continue;
+                }
+            }
+
+            // regex pattern
             if (rule.pattern && !std::regex_match(v, *rule.pattern))
-                errs[key] = label + " has invalid format";
+            {
+                errs.emplace(key, label + " has invalid format");
+                continue;
+            }
         }
+
         if (!errs.empty())
             return Result<void, FieldErrors>::Err(std::move(errs));
         return Result<void, FieldErrors>::Ok();
     }
 
+    // --------- helpers de construction de règles ---------
     inline Rule required(std::string label = "")
     {
         Rule r;
@@ -82,7 +117,8 @@ namespace Vix::utils
         r.label = std::move(label);
         return r;
     }
-    inline Rule len(size_t minL, size_t maxL, std::string lbl = "")
+
+    inline Rule len(std::size_t minL, std::size_t maxL, std::string lbl = "")
     {
         Rule r;
         r.min_len = minL;
@@ -90,6 +126,7 @@ namespace Vix::utils
         r.label = std::move(lbl);
         return r;
     }
+
     inline Rule num_range(long long minV, long long maxV, std::string lbl = "")
     {
         Rule r;
@@ -98,6 +135,7 @@ namespace Vix::utils
         r.label = std::move(lbl);
         return r;
     }
+
     inline Rule match(std::string regex_str, std::string lbl = "")
     {
         Rule r;
@@ -106,6 +144,6 @@ namespace Vix::utils
         return r;
     }
 
-}
+} // namespace Vix::utils
 
-#endif
+#endif // VIX_VALIDATION_HPP
