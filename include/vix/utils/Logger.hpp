@@ -38,13 +38,16 @@ namespace Vix
         void setLevel(Level level)
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            spd_->set_level(toSpdLevel(level));
+            if (spd_)
+                spd_->set_level(toSpdLevel(level));
         }
 
         template <typename... Args>
         void log(Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            if (!spd_)
+                return;
             switch (level)
             {
             case Level::TRACE:
@@ -93,6 +96,11 @@ namespace Vix
             std::string request_id;
             std::string module;
             std::map<std::string, std::string> fields;
+
+            Context()
+                : request_id(), module(), fields()
+            {
+            }
         };
 
         void setPattern(const std::string &pattern);
@@ -117,27 +125,9 @@ namespace Vix
         }
 
     private:
-        Logger()
-        {
-            try
-            {
-                auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-                console_sink->set_level(spdlog::level::trace);
+        Logger();
 
-                auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>("vix.log", 1024 * 1024 * 5, 3);
-                file_sink->set_level(spdlog::level::trace);
-
-                spd_ = std::make_shared<spdlog::logger>("vixLogger", spdlog::sinks_init_list{console_sink, file_sink});
-                spd_->set_level(spdlog::level::info);
-                spd_->flush_on(spdlog::level::warn);
-            }
-            catch (const spdlog::spdlog_ex &ex)
-            {
-                std::cerr << "Logger initialization failed: " << ex.what() << std::endl;
-            }
-        }
-
-        spdlog::level::level_enum toSpdLevel(Level level)
+        static spdlog::level::level_enum toSpdLevel(Level level) noexcept
         {
             switch (level)
             {
@@ -162,7 +152,7 @@ namespace Vix
         std::mutex mutex_;
 
         static thread_local Context tls_ctx_;
-        const Context &ctx() const { return tls_ctx_; }
+        const Context &ctx() const noexcept { return tls_ctx_; }
 
         static void appendKV(std::string &) {}
         template <typename V, typename... Rest>

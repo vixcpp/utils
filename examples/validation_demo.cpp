@@ -18,20 +18,22 @@ int main()
         {"age", num_range(1, 150, "Age")},
         {"email", match(R"(^[^@\s]+@[^@\s]+\.[^@\s]+$)", "Email")}};
 
-    auto r = validate_map(data, sch);
     auto &log = Logger::getInstance();
+    log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+    log.setLevel(Logger::Level::INFO);
+
+    const auto r = validate_map(data, sch);
 
     if (r.is_ok())
     {
         log.log(Logger::Level::INFO, "Validation OK");
+        return 0;
     }
-    else
+
+    log.log(Logger::Level::ERROR, "Validation FAILED:");
+    for (const auto &kv : r.error())
     {
-        for (auto &[k, msg] : r.error())
-        {
-            log.log(Logger::Level::ERROR, "{} -> {}", k, msg);
-        }
-        return 1;
+        log.log(Logger::Level::ERROR, " - {} -> {}", kv.first, kv.second);
     }
-    return 0;
+    return 1;
 }

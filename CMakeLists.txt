@@ -17,39 +17,158 @@
 cmake_minimum_required(VERSION 3.20)
 project(vix_utils VERSION 0.2.0 LANGUAGES CXX)
 
+# ================== Options ==================
+option(VIX_STRICT          "Treat warnings as errors"                 OFF)
+option(VIX_ENABLE_ASAN     "Enable AddressSanitizer (Debug only)"     ON)
+option(VIX_ENABLE_UBSAN    "Enable UndefinedBehaviorSanitizer (Dbg)" ON)
+option(VIX_ENABLE_LTO      "Enable link-time optimization (Release)"  OFF)
+option(VIX_HEADER_ONLY     "Build vix_utils as header-only INTERFACE" OFF)
+option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Default build type (friendly for local development)
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-# Reasonable warnings; projects can add more via their own toolchains.
-set(GLOBAL_CXX_FLAGS "-Wall -Wextra -Wshadow -Weffc++")
-set(CMAKE_CXX_FLAGS_RELEASE "${GLOBAL_CXX_FLAGS} -O2 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_DEBUG   "${GLOBAL_CXX_FLAGS} -g -fsanitize=address -fsanitize=undefined -D_GLIBCXX_DEBUG")
+# ================== Git / Build metadata ==================
+# VIX_GIT_HASH / VIX_BUILD_DATE -> utilisés par utils::build_info()
+execute_process(
+  COMMAND git rev-parse --short HEAD
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE VIX_GIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+)
+if(NOT VIX_GIT_HASH)
+  set(VIX_GIT_HASH "unknown")
+endif()
 
-# Source discovery — keep it simple and explicit if you prefer.
-file(GLOB_RECURSE UTILS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 
-add_library(vix_utils STATIC ${UTILS_SOURCES})
-add_library(Vix::utils ALIAS vix_utils)
-
-target_compile_features(vix_utils PUBLIC cxx_std_20)
-
-target_include_directories(vix_utils
-  PUBLIC
+# ================== Sources ==================
+if(VIX_HEADER_ONLY)
+  add_library(vix_utils INTERFACE)
+  add_library(Vix::utils ALIAS vix_utils)
+  target_include_directories(vix_utils INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-)
+  )
+  # Les defs build info sont utiles même en header-only
+  target_compile_definitions(vix_utils INTERFACE
+    VIX_GIT_HASH="${VIX_GIT_HASH}"
+    VIX_BUILD_DATE="${VIX_BUILD_DATE}"
+  )
+else()
+  file(GLOB_RECURSE UTILS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+  if(UTILS_SOURCES STREQUAL "")
+    message(FATAL_ERROR "No sources found under src/. If you want header-only, set VIX_HEADER_ONLY=ON")
+  endif()
 
-# External dependencies
+  add_library(vix_utils STATIC ${UTILS_SOURCES})
+  add_library(Vix::utils ALIAS vix_utils)
+
+  target_include_directories(vix_utils
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<INSTALL_INTERFACE:include>
+  )
+
+  target_compile_definitions(vix_utils PUBLIC
+    VIX_GIT_HASH="${VIX_GIT_HASH}"
+    VIX_BUILD_DATE="${VIX_BUILD_DATE}"
+  )
+endif()
+
+# ================== Dépendances ==================
 find_package(spdlog REQUIRED)
-target_link_libraries(vix_utils PUBLIC spdlog::spdlog)
+if(VIX_HEADER_ONLY)
+  target_link_libraries(vix_utils INTERFACE spdlog::spdlog)
+else()
+  target_link_libraries(vix_utils PUBLIC spdlog::spdlog)
+endif()
 
-# Export metadata (optional install/export support)
+# ================== Warnings par compilateur (compatibles) ==================
+include(CheckCXXCompilerFlag)
+
+function(vix_add_flags_if_supported tgt)
+  foreach(flag IN LISTS ARGN)
+    # Crée un identifiant de test unique par flag
+    string(REGEX REPLACE "[^A-Za-z0-9]" "_" flag_var "${flag}")
+    set(test_var "HAVE_CXXFLAG_${flag_var}")
+    check_cxx_compiler_flag("${flag}" ${test_var})
+    if(${test_var})
+      target_compile_options(${tgt} PRIVATE "${flag}")
+    endif()
+  endforeach()
+endfunction()
+
+function(vix_apply_warnings tgt)
+  if(MSVC)
+    vix_add_flags_if_supported(${tgt} /W4 /permissive-)
+    if(VIX_STRICT)
+      vix_add_flags_if_supported(${tgt} /WX)
+    endif()
+  else()
+    # Commun à Clang/GCC (testés dynamiquement)
+    vix_add_flags_if_supported(${tgt}
+      -Wall -Wextra -Wshadow
+      -Wconversion -Wsign-conversion
+      -Wformat=2 -Wundef
+      -Wnon-virtual-dtor -Woverloaded-virtual
+      -Wnull-dereference -Wdouble-promotion
+      -Wold-style-cast -Wredundant-decls -Wcast-qual -Wcast-align
+      -Weffc++
+    )
+
+    # Spécifiques GCC (Clang ne les connaît pas -> testera quand même)
+    vix_add_flags_if_supported(${tgt}
+      -Wduplicated-cond
+      -Wduplicated-branches
+      -Wlogical-op
+      -Wuseless-cast
+      -Wno-psabi
+    )
+
+    # Clang uniquement : parfois utile pour éviter le bruit quand on passe un flag inconnu
+    vix_add_flags_if_supported(${tgt} -Wno-unknown-warning-option)
+
+    if(VIX_STRICT)
+      vix_add_flags_if_supported(${tgt} -Werror)
+    endif()
+  endif()
+endfunction()
+
+if(NOT VIX_HEADER_ONLY)
+  vix_apply_warnings(vix_utils)
+endif()
+
+# ================== Sanitizers (Debug) ==================
+if(NOT MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT VIX_HEADER_ONLY)
+  if(VIX_ENABLE_ASAN)
+    target_compile_options(vix_utils PRIVATE -fsanitize=address)
+    target_link_options(vix_utils PRIVATE -fsanitize=address)
+  endif()
+  if(VIX_ENABLE_UBSAN)
+    target_compile_options(vix_utils PRIVATE -fsanitize=undefined)
+    target_link_options(vix_utils PRIVATE -fsanitize=undefined)
+  endif()
+endif()
+
+# ================== LTO (Release) ==================
+include(CheckIPOSupported)
+if(VIX_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT VIX_HEADER_ONLY)
+  check_ipo_supported(RESULT ipo_ok OUTPUT ipo_msg)
+  if(ipo_ok)
+    set_property(TARGET vix_utils PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+  else()
+    message(WARNING "IPO/LTO not supported: ${ipo_msg}")
+  endif()
+endif()
+
+# ================== Export / Install ==================
 set_target_properties(vix_utils PROPERTIES
   EXPORT_NAME utils
   OUTPUT_NAME vix_utils
@@ -57,13 +176,18 @@ set_target_properties(vix_utils PROPERTIES
   SOVERSION 0
 )
 
-install(TARGETS vix_utils
-  EXPORT vix_utilsTargets
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-  INCLUDES DESTINATION include
-)
+if(NOT VIX_HEADER_ONLY)
+  install(TARGETS vix_utils
+    EXPORT vix_utilsTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+  )
+else()
+  # cible INTERFACE : rien à installer côté binaire
+  install(TARGETS vix_utils EXPORT vix_utilsTargets)
+endif()
 
 install(DIRECTORY include/ DESTINATION include)
 
@@ -72,9 +196,31 @@ export(EXPORT vix_utilsTargets
   NAMESPACE Vix::
 )
 
-# Examples (opt-in)
-option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples" OFF)
-if (VIX_UTILS_BUILD_EXAMPLES)
+# Génère un package config trouvable par find_package(VixUtils)
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vix_utilsConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfig.cmake"
+  @ONLY
+)
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
+  DESTINATION lib/cmake/vix_utils
+)
+install(EXPORT vix_utilsTargets
+  FILE vix_utilsTargets.cmake
+  NAMESPACE Vix::
+  DESTINATION lib/cmake/vix_utils
+)
+
+# ================== Examples (opt-in) ==================
+if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
   add_executable(utils_log_demo         examples/log_demo.cpp)
   target_link_libraries(utils_log_demo PRIVATE Vix::utils)
 
@@ -85,4 +231,9 @@ if (VIX_UTILS_BUILD_EXAMPLES)
   target_link_libraries(utils_env_time_uuid PRIVATE Vix::utils)
 endif()
 
-message(STATUS "Utils library configured with ${UTILS_SOURCES}")
+# ================== Status ==================
+if(UTILS_SOURCES)
+  message(STATUS "Utils library configured with ${UTILS_SOURCES}")
+else()
+  message(STATUS "Utils header-only mode")
+endif()
