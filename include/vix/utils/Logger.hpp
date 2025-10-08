@@ -13,6 +13,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/fmt/ostr.h>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace Vix
 {
@@ -75,6 +76,13 @@ namespace Vix
         void logModule(const std::string &module, Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
         {
             log(level, "[{}] {}", module, fmt::vformat(fmtstr, fmt::make_format_args(std::forward<Args>(args)...)));
+        }
+
+        template <typename... Args>
+        void logModule(const std::string &module, Level level,
+                       std::string_view fmtstr, Args &&...args)
+        {
+            log(level, "[{}] {}", module, fmt::vformat(fmtstr, fmt::make_format_args(args...)));
         }
 
         template <typename... Args>
