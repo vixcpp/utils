@@ -6,6 +6,7 @@
 #include <random>
 #include <cstdint>
 #include <chrono>
+#include <cstddef>
 
 namespace Vix::utils
 {
@@ -31,7 +32,7 @@ namespace Vix::utils
         std::uniform_int_distribution<std::uint32_t> dist32(0, 0xFFFFFFFFu);
 
         // remplir par paquets de 4 octets
-        for (int i = 0; i < 16; i += 4)
+        for (std::size_t i = 0; i < 16; i += 4)
         {
             std::uint32_t r = dist32(rng);
             b[i + 0] = static_cast<std::uint8_t>((r >> 24) & 0xFF);
@@ -47,15 +48,15 @@ namespace Vix::utils
         // format "8-4-4-4-12" en hex lowercase
         static constexpr char hexdig[] = "0123456789abcdef";
         std::array<char, 36> out{};
-        int oi = 0;
-        for (int i = 0; i < 16; ++i)
+        std::size_t oi = 0;
+        for (std::size_t i = 0; i < 16; ++i)
         {
             // positions des tirets : 8, 13, 18, 23
             if (oi == 8 || oi == 13 || oi == 18 || oi == 23)
                 out[oi++] = '-';
 
-            out[oi++] = hexdig[(b[i] >> 4) & 0x0F];
-            out[oi++] = hexdig[(b[i] >> 0) & 0x0F];
+            out[oi++] = hexdig[static_cast<std::size_t>((b[i] >> 4) & 0x0F)];
+            out[oi++] = hexdig[static_cast<std::size_t>((b[i] >> 0) & 0x0F)];
         }
 
         return std::string(out.data(), out.size());
