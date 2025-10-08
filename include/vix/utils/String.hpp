@@ -61,8 +61,12 @@ namespace Vix::utils
     inline std::vector<std::string> split(std::string_view s, char sep)
     {
         std::vector<std::string> out;
-        // reservation heuristic (approx)
-        out.reserve(std::count(s.begin(), s.end(), sep) + 1);
+
+        // cast explicite pour éviter le -Wsign-conversion
+        {
+            const auto cnt = static_cast<std::size_t>(std::count(s.begin(), s.end(), sep));
+            out.reserve(cnt + 1);
+        }
 
         std::size_t start = 0;
         while (start <= s.size())
