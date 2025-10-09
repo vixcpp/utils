@@ -18,23 +18,22 @@ cmake_minimum_required(VERSION 3.20)
 project(vix_utils VERSION 0.2.0 LANGUAGES CXX)
 
 # ================== Options ==================
-option(VIX_STRICT          "Treat warnings as errors"                 OFF)
-option(VIX_ENABLE_ASAN     "Enable AddressSanitizer (Debug only)"     ON)
-option(VIX_ENABLE_UBSAN    "Enable UndefinedBehaviorSanitizer (Dbg)" ON)
-option(VIX_ENABLE_LTO      "Enable link-time optimization (Release)"  OFF)
-option(VIX_HEADER_ONLY     "Build vix_utils as header-only INTERFACE" OFF)
-option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                OFF)
+option(VIX_STRICT              "Treat warnings as errors"                 OFF)
+option(VIX_ENABLE_LTO          "Enable link-time optimization (Release)"  OFF)
+option(VIX_HEADER_ONLY         "Build vix_utils as header-only INTERFACE" OFF)
+option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                    OFF)
+# ⚠️ N'active PAS de sanitizers ici : hérite de VIX_ENABLE_SANITIZERS défini au top-level.
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-endif()
+# Ne force pas le build type ici : laissé au super-projet
+# if(NOT CMAKE_BUILD_TYPE)
+#   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+# endif()
 
 # ================== Git / Build metadata ==================
-# VIX_GIT_HASH / VIX_BUILD_DATE -> utilisés par utils::build_info()
 execute_process(
   COMMAND git rev-parse --short HEAD
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -56,7 +55,6 @@ if(VIX_HEADER_ONLY)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
   )
-  # Les defs build info sont utiles même en header-only
   target_compile_definitions(vix_utils INTERFACE
     VIX_GIT_HASH="${VIX_GIT_HASH}"
     VIX_BUILD_DATE="${VIX_BUILD_DATE}"
@@ -95,7 +93,6 @@ include(CheckCXXCompilerFlag)
 
 function(vix_add_flags_if_supported tgt)
   foreach(flag IN LISTS ARGN)
-    # Crée un identifiant de test unique par flag
     string(REGEX REPLACE "[^A-Za-z0-9]" "_" flag_var "${flag}")
     set(test_var "HAVE_CXXFLAG_${flag_var}")
     check_cxx_compiler_flag("${flag}" ${test_var})
@@ -112,7 +109,6 @@ function(vix_apply_warnings tgt)
       vix_add_flags_if_supported(${tgt} /WX)
     endif()
   else()
-    # Commun à Clang/GCC (testés dynamiquement)
     vix_add_flags_if_supported(${tgt}
       -Wall -Wextra -Wshadow
       -Wconversion -Wsign-conversion
@@ -122,17 +118,10 @@ function(vix_apply_warnings tgt)
       -Wold-style-cast -Wredundant-decls -Wcast-qual -Wcast-align
       -Weffc++
     )
-
-    # Spécifiques GCC (Clang ne les connaît pas -> testera quand même)
     vix_add_flags_if_supported(${tgt}
-      -Wduplicated-cond
-      -Wduplicated-branches
-      -Wlogical-op
-      -Wuseless-cast
-      -Wno-psabi
+      -Wduplicated-cond -Wduplicated-branches
+      -Wlogical-op -Wuseless-cast -Wno-psabi
     )
-
-    # Clang uniquement : parfois utile pour éviter le bruit quand on passe un flag inconnu
     vix_add_flags_if_supported(${tgt} -Wno-unknown-warning-option)
 
     if(VIX_STRICT)
@@ -145,21 +134,21 @@ if(NOT VIX_HEADER_ONLY)
   vix_apply_warnings(vix_utils)
 endif()
 
-# ================== Sanitizers (Debug) ==================
-if(NOT MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT VIX_HEADER_ONLY)
-  if(VIX_ENABLE_ASAN)
-    target_compile_options(vix_utils PRIVATE -fsanitize=address)
-    target_link_options(vix_utils PRIVATE -fsanitize=address)
+# ================== Sanitizers (hérités du top-level) ==================
+# Unifie avec l'umbrella : VIX_ENABLE_SANITIZERS=ON applique ASan+UBSan
+function(vix_utils_apply_sanitizers tgt)
+  if (VIX_ENABLE_SANITIZERS AND NOT VIX_HEADER_ONLY AND TARGET ${tgt})
+    message(STATUS "[utils] enabling sanitizers on ${tgt}")
+    target_compile_options(${tgt} PRIVATE -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined)
+    target_link_options(   ${tgt} PRIVATE                       -fsanitize=address,undefined)
   endif()
-  if(VIX_ENABLE_UBSAN)
-    target_compile_options(vix_utils PRIVATE -fsanitize=undefined)
-    target_link_options(vix_utils PRIVATE -fsanitize=undefined)
-  endif()
-endif()
+endfunction()
+
+vix_utils_apply_sanitizers(vix_utils)
 
 # ================== LTO (Release) ==================
 include(CheckIPOSupported)
-if(VIX_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT VIX_HEADER_ONLY)
+if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release")
   check_ipo_supported(RESULT ipo_ok OUTPUT ipo_msg)
   if(ipo_ok)
     set_property(TARGET vix_utils PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -185,7 +174,6 @@ if(NOT VIX_HEADER_ONLY)
     INCLUDES DESTINATION include
   )
 else()
-  # cible INTERFACE : rien à installer côté binaire
   install(TARGETS vix_utils EXPORT vix_utilsTargets)
 endif()
 
@@ -196,7 +184,7 @@ export(EXPORT vix_utilsTargets
   NAMESPACE Vix::
 )
 
-# Génère un package config trouvable par find_package(VixUtils)
+# Génération config find_package(Vix::utils)
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
@@ -232,8 +220,8 @@ if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
 endif()
 
 # ================== Status ==================
-if(UTILS_SOURCES)
-  message(STATUS "Utils library configured with ${UTILS_SOURCES}")
+if(DEFINED UTILS_SOURCES AND NOT VIX_HEADER_ONLY)
+  message(STATUS "Utils library sources: ${UTILS_SOURCES}")
 else()
-  message(STATUS "Utils header-only mode")
+  message(STATUS "Utils header-only mode or no sources listed")
 endif()
