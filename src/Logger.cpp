@@ -5,25 +5,34 @@
 
 namespace Vix
 {
+    // ------------------------------------------------------------------
+    // Thread-local context definition
+    // ------------------------------------------------------------------
     thread_local Logger::Context Logger::tls_ctx_{};
 
-    Logger::Logger()
-        : spd_(nullptr), mutex_()
+    // ------------------------------------------------------------------
+    // Constructor — Initialize default sinks and logger
+    // ------------------------------------------------------------------
+    Logger::Logger() : spd_(nullptr), mutex_()
     {
         try
         {
+            // Console sink with color output for interactive readability
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
             console_sink->set_level(spdlog::level::trace);
 
+            // Rotating file sink: 5 MB per file, keep 3 backups
             auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
                 "vix.log", 1024 * 1024 * 5, 3);
             file_sink->set_level(spdlog::level::trace);
 
+            // Multi-sink logger combining console and file output
             spd_ = std::make_shared<spdlog::logger>(
                 "vixLogger", spdlog::sinks_init_list{console_sink, file_sink});
             spd_->set_level(spdlog::level::info);
             spd_->flush_on(spdlog::level::warn);
 
+            // Register as default logger for the process
             spdlog::set_default_logger(spd_);
         }
         catch (const spdlog::spdlog_ex &ex)
@@ -32,6 +41,9 @@ namespace Vix
         }
     }
 
+    // ------------------------------------------------------------------
+    // setPattern — Change runtime log format pattern
+    // ------------------------------------------------------------------
     void Logger::setPattern(const std::string &pattern)
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -39,10 +51,12 @@ namespace Vix
             spd_->set_pattern(pattern);
     }
 
+    // ------------------------------------------------------------------
+    // setAsync — Toggle between synchronous and asynchronous modes
+    // ------------------------------------------------------------------
     void Logger::setAsync(bool enable)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-
         if (!spd_)
             return;
 
@@ -50,10 +64,11 @@ namespace Vix
         {
             if (enable)
             {
-                // Switch to async mode
+                // Initialize thread pool if not already
                 if (!spdlog::thread_pool())
                     spdlog::init_thread_pool(8192, 1);
 
+                // Clone sinks from the current logger
                 auto sinks = spd_->sinks();
 
                 auto async_logger = std::make_shared<spdlog::async_logger>(
@@ -73,7 +88,7 @@ namespace Vix
             }
             else
             {
-                // Switch back to sync mode
+                // Switch back to synchronous mode
                 auto sinks = spd_->sinks();
 
                 auto sync_logger = std::make_shared<spdlog::logger>(
@@ -96,6 +111,9 @@ namespace Vix
         }
     }
 
+    // ------------------------------------------------------------------
+    // Context management (thread-local)
+    // ------------------------------------------------------------------
     void Logger::setContext(Context ctx)
     {
         tls_ctx_ = std::move(ctx);
