@@ -7,15 +7,53 @@
 #include <algorithm>
 #include <cctype>
 
+/**
+ * @file VIX_STRING_HPP
+ * @brief Small string helpers (trim, case transform, prefix/suffix checks, split/join).
+ *
+ * Header-only utilities designed for performance and clarity:
+ *  - In-place-by-value trims (return-by-value for chaining)
+ *  - ASCII-only case transform (C locale)
+ *  - `split` without stringstream (fewer allocations)
+ *  - `join` with pre-reservation
+ *
+ * @note Whitespace detection uses `std::isspace` in the C locale.
+ * @note All functions are exception-free and `noexcept` where applicable.
+ */
+
 namespace Vix::utils
 {
-    // --- helpers internes ---
+    // ---------------------------------------------------------------------
+    // Internal helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Tests if a byte is whitespace (C locale).
+     * @param c Unsigned character byte.
+     * @return `true` if `std::isspace(c)` is non-zero.
+     */
     inline constexpr bool _is_space(unsigned char c) noexcept
     {
         return std::isspace(c) != 0; // C-locale; sufficient for generic trimming
     }
 
-    // left-trim (in-place, returns s by value for chaining)
+    // ---------------------------------------------------------------------
+    // Trimming utilities
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Left-trim leading whitespace (C locale).
+     *
+     * Returns a new string with leading spaces removed. Operates on a copy
+     * and returns by value for easy chaining.
+     *
+     * @param s Input string (copied).
+     * @return String without leading whitespace.
+     *
+     * @code
+     * auto x = ltrim("   hello ");  // -> "hello "
+     * @endcode
+     */
     inline std::string ltrim(std::string s) noexcept
     {
         auto it = std::find_if(s.begin(), s.end(), [](unsigned char c)
@@ -24,7 +62,19 @@ namespace Vix::utils
         return s;
     }
 
-    // right-trim (in-place, returns s by value for chaining)
+    /**
+     * @brief Right-trim trailing whitespace (C locale).
+     *
+     * Returns a new string with trailing spaces removed. Operates on a copy
+     * and returns by value for easy chaining.
+     *
+     * @param s Input string (copied).
+     * @return String without trailing whitespace.
+     *
+     * @code
+     * auto x = rtrim("   hello ");  // -> "   hello"
+     * @endcode
+     */
     inline std::string rtrim(std::string s) noexcept
     {
         auto it = std::find_if(s.rbegin(), s.rend(), [](unsigned char c)
@@ -34,11 +84,33 @@ namespace Vix::utils
         return s;
     }
 
+    /**
+     * @brief Trim both ends (C locale).
+     * @param s Input string (copied).
+     * @return String without leading nor trailing whitespace.
+     *
+     * @code
+     * auto x = trim("  hello  "); // -> "hello"
+     * @endcode
+     */
     inline std::string trim(std::string s) noexcept
     {
         return rtrim(ltrim(std::move(s)));
     }
 
+    // ---------------------------------------------------------------------
+    // Case transform
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Convert to lowercase (ASCII only).
+     *
+     * Uses `std::tolower` (C locale) per byte. Non-ASCII characters
+     * are transformed byte-wise (no unicode folding).
+     *
+     * @param s Input string (copied).
+     * @return Lowercased string.
+     */
     inline std::string to_lower(std::string s) noexcept
     {
         std::transform(s.begin(), s.end(), s.begin(),
@@ -47,22 +119,63 @@ namespace Vix::utils
         return s;
     }
 
+    // ---------------------------------------------------------------------
+    // Prefix/Suffix checks
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Checks if `s` starts with prefix `p`.
+     * @param s Full string (view).
+     * @param p Prefix (view).
+     * @return `true` if `s` begins with `p`.
+     *
+     * @code
+     * starts_with("vix-core", "vix"); // true
+     * @endcode
+     */
     inline bool starts_with(std::string_view s, std::string_view p) noexcept
     {
         return s.size() >= p.size() && s.compare(0, p.size(), p) == 0;
     }
 
+    /**
+     * @brief Checks if `s` ends with suffix `p`.
+     * @param s Full string (view).
+     * @param p Suffix (view).
+     * @return `true` if `s` ends with `p`.
+     *
+     * @code
+     * ends_with("config.json", ".json"); // true
+     * @endcode
+     */
     inline bool ends_with(std::string_view s, std::string_view p) noexcept
     {
         return s.size() >= p.size() && s.compare(s.size() - p.size(), p.size(), p) == 0;
     }
 
-    // split without stringstream (faster, zero allocation except outputs)
+    // ---------------------------------------------------------------------
+    // Split / Join
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Split by a single-character separator.
+     *
+     * Keeps empty segments (e.g., splitting `",,a"` by `','` yields `["", "", "a"]`).
+     * Uses linear scanning with capacity reservation; avoids `stringstream`.
+     *
+     * @param s Input string view.
+     * @param sep Separator character.
+     * @return Vector of substrings (materialized as `std::string`).
+     *
+     * @code
+     * auto parts = split("a,b,,c", ','); // ["a","b","","c"]
+     * @endcode
+     */
     inline std::vector<std::string> split(std::string_view s, char sep)
     {
         std::vector<std::string> out;
 
-        // cast explicite pour éviter le -Wsign-conversion
+        // explicit cast to avoid -Wsign-conversion
         {
             const auto cnt = static_cast<std::size_t>(std::count(s.begin(), s.end(), sep));
             out.reserve(cnt + 1);
@@ -83,7 +196,16 @@ namespace Vix::utils
         return out;
     }
 
-    // Count non-overlapping occurrences of `needle` in `haystack`
+    /**
+     * @brief Count non-overlapping occurrences of `needle` in `haystack`.
+     * @param haystack Text to search.
+     * @param needle Substring to count.
+     * @return Number of non-overlapping matches.
+     *
+     * @code
+     * count_nonoverlap("aaaa", "aa"); // 2
+     * @endcode
+     */
     inline std::size_t count_nonoverlap(std::string_view haystack, std::string_view needle) noexcept
     {
         if (needle.empty())
@@ -100,7 +222,19 @@ namespace Vix::utils
         return count;
     }
 
-    // multi-character split: keep empty segments
+    /**
+     * @brief Split by a multi-character separator. Keeps empty segments.
+     *
+     * If `sep` is empty, returns `{ std::string(s) }` (no split), matching many APIs.
+     *
+     * @param s Input string view.
+     * @param sep Separator substring.
+     * @return Vector of substrings (materialized as `std::string`).
+     *
+     * @code
+     * auto parts = split("a--b----c", "--"); // ["a","b","","c"]
+     * @endcode
+     */
     inline std::vector<std::string> split(std::string_view s, std::string_view sep)
     {
         if (sep.empty())
@@ -127,7 +261,18 @@ namespace Vix::utils
         return out;
     }
 
-    // join with capacity reservation
+    /**
+     * @brief Join strings with a separator, reserving capacity upfront.
+     *
+     * @param v Vector of strings to join.
+     * @param sep Separator string (may be multi-character).
+     * @return Concatenated string.
+     *
+     * @code
+     * std::vector<std::string> v = {"a","b","","c"};
+     * auto s = join(v, "::"); // "a::b::::c"
+     * @endcode
+     */
     inline std::string join(const std::vector<std::string> &v, std::string_view sep)
     {
         if (v.empty())

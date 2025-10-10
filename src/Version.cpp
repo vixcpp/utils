@@ -10,9 +10,28 @@
 
 namespace Vix::utils
 {
+    /**
+     * @brief Compose full build information string.
+     *
+     * The resulting format is:
+     * ```
+     * v<version> (<git-hash>, <build-date>)
+     * ```
+     *
+     * For example:
+     * ```
+     * v0.2.0 (abcdef1, Oct 10 2025 11:42:00)
+     * ```
+     *
+     * @return Full build descriptor for logging or CLI display.
+     *
+     * @code
+     * std::cout << build_info();
+     * // v0.2.0 (abcdef1, Oct 10 2025 11:42:00)
+     * @endcode
+     */
     std::string build_info()
     {
-        // format simple : "v0.2.0 (abcdef1, Oct 08 2025 11:42:00)"
         return std::string("v") + std::string(version()) +
                " (" + VIX_GIT_HASH + ", " + VIX_BUILD_DATE + ")";
     }

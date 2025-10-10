@@ -7,14 +7,54 @@
 #include <cctype>
 #include <charconv>
 
+/**
+ * @file VIX_ENV_HPP
+ * @brief Environment variable helpers for Vix.cpp utilities.
+ *
+ * This header provides simple, type-safe, and dependency-free functions
+ * to read environment variables and convert them into useful types
+ * (`std::string`, `bool`, `int`, `unsigned`, and `double`).
+ *
+ * These functions are:
+ *  - Header-only and exception-free
+ *  - Whitespace-tolerant (trim leading/trailing spaces)
+ *  - Case-insensitive for boolean parsing
+ *  - Fail-safe: return a default value on missing or invalid input
+ *
+ * @code
+ * using namespace Vix::utils;
+ *
+ * std::string db = env_or("DB_URL", "mysql://localhost");
+ * bool debug    = env_bool("APP_DEBUG", false);
+ * int port      = env_int("PORT", 8080);
+ * unsigned thr  = env_uint("WORKERS", 4);
+ * double ratio  = env_double("CACHE_RATIO", 0.25);
+ * @endcode
+ *
+ * @note Thread-safe for read-only access.
+ * @note Works on POSIX and Windows.
+ */
+
 namespace Vix::utils
 {
     namespace detail
     {
+        /**
+         * @brief Converts a character to lowercase (ASCII only).
+         * @param c The input character.
+         * @return Lowercase version of `c`.
+         */
         inline char to_lower_ascii(unsigned char c) noexcept
         {
             return static_cast<char>(std::tolower(c));
         }
+
+        /**
+         * @brief Performs a case-insensitive comparison between two strings (ASCII only).
+         * @param a First string.
+         * @param b Second string.
+         * @return `true` if equal ignoring case, otherwise `false`.
+         */
         inline bool iequals(std::string_view a, std::string_view b) noexcept
         {
             if (a.size() != b.size())
@@ -29,21 +69,46 @@ namespace Vix::utils
         }
     } // namespace detail
 
-    // Renvoie la valeur de la variable d'environnement, sinon def
+    /**
+     * @brief Returns the value of an environment variable, or a default if not found.
+     *
+     * @param key The environment variable name.
+     * @param def The default value to return if not found.
+     * @return The variable’s value or the default string.
+     *
+     * @code
+     * std::string host = env_or("APP_HOST", "127.0.0.1");
+     * @endcode
+     */
     inline std::string env_or(std::string_view key, std::string_view def = "")
     {
-        // std::getenv exige un C-string null-terminé
         if (const char *v = std::getenv(std::string(key).c_str()))
             return std::string(v);
         return std::string(def);
     }
 
-    // Interprète une env var comme booléen (1/true/yes/on)
+    /**
+     * @brief Reads an environment variable and interprets it as a boolean.
+     *
+     * Recognized truthy values (case-insensitive): `1`, `true`, `yes`, `on`.
+     * Any other value, or missing variable, returns the default.
+     *
+     * @param key The environment variable name.
+     * @param def Default value if missing or invalid.
+     * @return Boolean value derived from the variable.
+     *
+     * @code
+     * bool debug = env_bool("APP_DEBUG", false);
+     * // APP_DEBUG=true → debug == true
+     * // APP_DEBUG=no   → debug == false
+     * @endcode
+     */
     inline bool env_bool(std::string_view key, bool def = false)
     {
         using namespace std::literals;
         const auto s = env_or(key, def ? "1"sv : "0"sv);
-        // trim léger (espaces de tête/fin)
+
+        // Trim leading/trailing spaces
         std::size_t b = 0, e = s.size();
         while (b < e && std::isspace(static_cast<unsigned char>(s[b])))
             ++b;
@@ -57,14 +122,27 @@ namespace Vix::utils
                detail::iequals(v, "on");
     }
 
-    // Lit un int en base 10 ; renvoie def si absent/invalide
+    /**
+     * @brief Reads an environment variable as a signed integer (base 10).
+     *
+     * Leading/trailing spaces are trimmed. Returns the default if parsing fails.
+     *
+     * @param key The environment variable name.
+     * @param def Default integer value if missing or invalid.
+     * @return Parsed integer or default.
+     *
+     * @code
+     * int port = env_int("PORT", 8080);
+     * // PORT="9090" → 9090
+     * // PORT="abc"  → 8080
+     * @endcode
+     */
     inline int env_int(std::string_view key, int def = 0)
     {
         const auto s = env_or(key);
         if (s.empty())
             return def;
 
-        // trim léger
         const char *first = s.data();
         const char *last = s.data() + s.size();
         while (first < last && std::isspace(static_cast<unsigned char>(*first)))
@@ -81,7 +159,20 @@ namespace Vix::utils
         return value;
     }
 
-    // (Optionnel) entier non signé
+    /**
+     * @brief Reads an environment variable as an unsigned integer (base 10).
+     *
+     * Leading/trailing spaces are trimmed. Returns the default if parsing fails
+     * or if the value is negative.
+     *
+     * @param key The environment variable name.
+     * @param def Default unsigned integer if missing or invalid.
+     * @return Parsed unsigned integer or default.
+     *
+     * @code
+     * unsigned threads = env_uint("WORKERS", 4u);
+     * @endcode
+     */
     inline unsigned env_uint(std::string_view key, unsigned def = 0u)
     {
         const auto s = env_or(key);
@@ -104,7 +195,20 @@ namespace Vix::utils
         return value;
     }
 
-    // (Optionnel) double ; tolère séparateur '.' ; renvoie def si invalide
+    /**
+     * @brief Reads an environment variable as a floating-point value.
+     *
+     * Uses `std::strtod` for conversion, supports `.` as decimal separator only.
+     * Returns the default if parsing fails or unparsed characters remain.
+     *
+     * @param key The environment variable name.
+     * @param def Default double value if missing or invalid.
+     * @return Parsed double or default.
+     *
+     * @code
+     * double ratio = env_double("CACHE_RATIO", 0.25);
+     * @endcode
+     */
     inline double env_double(std::string_view key, double def = 0.0)
     {
         const auto s = env_or(key);
@@ -114,7 +218,7 @@ namespace Vix::utils
         char *endp = nullptr;
         const double v = std::strtod(s.c_str(), &endp);
         if (!endp || *endp != '\0')
-            return def; // invalide (reste non parsé)
+            return def; // invalid (unparsed remainder)
         return v;
     }
 
