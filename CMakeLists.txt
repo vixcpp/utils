@@ -1,42 +1,50 @@
+cmake_minimum_required(VERSION 3.20)
+
 # ====================================================================
 # Vix.cpp — Utils Module
 # ====================================================================
 # Purpose:
-#   - Cross-cutting utilities (logging, validation helpers, env/time/UUID, etc.)
-#   - Usually a small static library; can be header-only if desired.
+#   Cross-cutting utilities used by other Vix modules and end-user apps:
+#   logging, validation helpers, environment/time/UUID utilities, etc.
 #
 # Targets:
-#   - vix_utils   (real target)
-#   - Vix::utils  (alias, preferred by consumers)
+#   - vix_utils   : Real library target (STATIC by default, or header-only INTERFACE)
+#   - Vix::utils  : Namespaced alias for consumers
+#
+# Integration & Install:
+#   - Public headers live under modules/utils/include/...
+#   - This module depends on spdlog for logging.
+#   - The target joins the umbrella export-set `VixTargets` so that
+#     a system-wide installation of Vix exposes Vix::utils via:
+#       find_package(Vix CONFIG REQUIRED)
+#       target_link_libraries(app PRIVATE Vix::utils)
 #
 # Notes:
-#   - Public headers are under modules/utils/include/...
-#   - This module depends on spdlog for logging.
+#   - Sanitizers are inherited from the umbrella if VIX_ENABLE_SANITIZERS=ON.
+#   - Header-only mode is supported via VIX_HEADER_ONLY=ON.
 # ====================================================================
 
-cmake_minimum_required(VERSION 3.20)
 project(vix_utils VERSION 0.2.0 LANGUAGES CXX)
 
+include(GNUInstallDirs)
+include(CheckCXXCompilerFlag)
+
 # ================== Options ==================
-option(VIX_STRICT              "Treat warnings as errors"                 OFF)
-option(VIX_ENABLE_LTO          "Enable link-time optimization (Release)"  OFF)
-option(VIX_HEADER_ONLY         "Build vix_utils as header-only INTERFACE" OFF)
-option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                    OFF)
-# ⚠️ N'active PAS de sanitizers ici : hérite de VIX_ENABLE_SANITIZERS défini au top-level.
+option(VIX_STRICT               "Treat warnings as errors"                  OFF)
+option(VIX_ENABLE_LTO           "Enable link-time optimization (Release)"   OFF)
+option(VIX_HEADER_ONLY          "Build vix_utils as header-only INTERFACE"  OFF)
+option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                      OFF)
+# Sanitizers are inherited from the umbrella via VIX_ENABLE_SANITIZERS
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Ne force pas le build type ici : laissé au super-projet
-# if(NOT CMAKE_BUILD_TYPE)
-#   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-# endif()
-
 # ================== Git / Build metadata ==================
+# Use CURRENT_SOURCE_DIR to allow inclusion via add_subdirectory.
 execute_process(
   COMMAND git rev-parse --short HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   OUTPUT_VARIABLE VIX_GIT_HASH
   OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_QUIET
@@ -51,9 +59,10 @@ string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 if(VIX_HEADER_ONLY)
   add_library(vix_utils INTERFACE)
   add_library(Vix::utils ALIAS vix_utils)
+
   target_include_directories(vix_utils INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
   target_compile_definitions(vix_utils INTERFACE
     VIX_GIT_HASH="${VIX_GIT_HASH}"
@@ -71,7 +80,7 @@ else()
   target_include_directories(vix_utils
     PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-      $<INSTALL_INTERFACE:include>
+      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
 
   target_compile_definitions(vix_utils PUBLIC
@@ -80,17 +89,24 @@ else()
   )
 endif()
 
-# ================== Dépendances ==================
+# ================== Dependencies ==================
 find_package(spdlog REQUIRED)
-if(VIX_HEADER_ONLY)
-  target_link_libraries(vix_utils INTERFACE spdlog::spdlog)
+# Prefer header-only if available; otherwise use the compiled target.
+if(TARGET spdlog::spdlog_header_only)
+  if(VIX_HEADER_ONLY)
+    target_link_libraries(vix_utils INTERFACE spdlog::spdlog_header_only)
+  else()
+    target_link_libraries(vix_utils PUBLIC spdlog::spdlog_header_only)
+  endif()
 else()
-  target_link_libraries(vix_utils PUBLIC spdlog::spdlog)
+  if(VIX_HEADER_ONLY)
+    target_link_libraries(vix_utils INTERFACE spdlog::spdlog)
+  else()
+    target_link_libraries(vix_utils PUBLIC spdlog::spdlog)
+  endif()
 endif()
 
-# ================== Warnings par compilateur (compatibles) ==================
-include(CheckCXXCompilerFlag)
-
+# ================== Compiler warnings ==================
 function(vix_add_flags_if_supported tgt)
   foreach(flag IN LISTS ARGN)
     string(REGEX REPLACE "[^A-Za-z0-9]" "_" flag_var "${flag}")
@@ -134,8 +150,7 @@ if(NOT VIX_HEADER_ONLY)
   vix_apply_warnings(vix_utils)
 endif()
 
-# ================== Sanitizers (hérités du top-level) ==================
-# Unifie avec l'umbrella : VIX_ENABLE_SANITIZERS=ON applique ASan+UBSan
+# ================== Sanitizers (umbrella-inherited) ==================
 function(vix_utils_apply_sanitizers tgt)
   if (VIX_ENABLE_SANITIZERS AND NOT VIX_HEADER_ONLY AND TARGET ${tgt})
     message(STATUS "[utils] enabling sanitizers on ${tgt}")
@@ -143,12 +158,11 @@ function(vix_utils_apply_sanitizers tgt)
     target_link_options(   ${tgt} PRIVATE                       -fsanitize=address,undefined)
   endif()
 endfunction()
-
 vix_utils_apply_sanitizers(vix_utils)
 
 # ================== LTO (Release) ==================
-include(CheckIPOSupported)
 if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release")
+  include(CheckIPOSupported)
   check_ipo_supported(RESULT ipo_ok OUTPUT ipo_msg)
   if(ipo_ok)
     set_property(TARGET vix_utils PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -157,7 +171,7 @@ if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
-# ================== Export / Install ==================
+# ================== Install / Export (umbrella) ==================
 set_target_properties(vix_utils PROPERTIES
   EXPORT_NAME utils
   OUTPUT_NAME vix_utils
@@ -167,45 +181,21 @@ set_target_properties(vix_utils PROPERTIES
 
 if(NOT VIX_HEADER_ONLY)
   install(TARGETS vix_utils
-    EXPORT vix_utilsTargets
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin
-    INCLUDES DESTINATION include
+    EXPORT  VixTargets                 # <- join umbrella export-set
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   )
 else()
-  install(TARGETS vix_utils EXPORT vix_utilsTargets)
+  install(TARGETS vix_utils
+    EXPORT  VixTargets                 # <- even for INTERFACE, export target
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
 endif()
 
-install(DIRECTORY include/ DESTINATION include)
-
-export(EXPORT vix_utilsTargets
-  FILE "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsTargets.cmake"
-  NAMESPACE Vix::
-)
-
-# Génération config find_package(Vix::utils)
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
-  VERSION ${PROJECT_VERSION}
-  COMPATIBILITY SameMajorVersion
-)
-configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vix_utilsConfig.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfig.cmake"
-  @ONLY
-)
-install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
-  DESTINATION lib/cmake/vix_utils
-)
-install(EXPORT vix_utilsTargets
-  FILE vix_utilsTargets.cmake
-  NAMESPACE Vix::
-  DESTINATION lib/cmake/vix_utils
-)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
 
 # ================== Examples (opt-in) ==================
 if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
