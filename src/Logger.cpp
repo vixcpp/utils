@@ -1,38 +1,80 @@
+/**
+ * @file Logger.cpp
+ * @brief Minimalist, colorized logger for the Vix CLI — no timestamps, no noise.
+ *
+ * ## Overview
+ * This implementation provides a clean, developer-friendly console logger for
+ * command-line tools and framework messages. It is designed for clarity and
+ * simplicity in terminal output, without timestamps, thread IDs, or extra prefixes.
+ *
+ * Example output:
+ * ```
+ * [vix][info] Project built successfully
+ * [vix][warn] Missing CMakeLists.txt in this directory
+ * [vix][error] Failed to configure CMake (code 1)
+ * ```
+ *
+ * ## Key Characteristics
+ * - **Console-only** logging (no file rotation).
+ * - **Color-coded levels**: info, warn, error, critical.
+ * - **No timestamps or metadata** — clean for CLI readability.
+ * - Thread-safe and singleton-based (process-wide).
+ * - Compatible with the full `Logger` interface (`log`, `logModule`, `logf`, etc.).
+ *
+ * ## Pattern
+ * Uses the spdlog pattern:
+ * ```
+ * [vix][%^%l%$] %v
+ * ```
+ * where:
+ *  - `[vix]` is a static tag for all Vix outputs.
+ *  - `%l` is the log level (INFO/WARN/ERROR/...).
+ *  - `%^` and `%$` apply color formatting.
+ *  - `%v` is the user message.
+ *
+ * ## Thread Context
+ * The thread-local `Context` (request_id, module, and custom fields) is
+ * preserved and accessible but not automatically shown unless used with `logf()`.
+ *
+ * @note This variant is tailored for the Vix CLI and developer utilities.
+ *       For server or application use, a richer logger (with timestamps or files)
+ *       should be configured instead.
+ */
+
 #include "vix/utils/Logger.hpp"
-#include <spdlog/async.h>
-#include <spdlog/async_logger.h>
 #include <spdlog/pattern_formatter.h>
 
 namespace Vix
 {
-    // ------------------------------------------------------------------
-    // Thread-local context definition
-    // ------------------------------------------------------------------
+    // ----------------------------------------------------------------------
+    // Thread-local context instance
+    // ----------------------------------------------------------------------
     thread_local Logger::Context Logger::tls_ctx_{};
 
-    // ------------------------------------------------------------------
-    // Constructor — Initialize default sinks and logger
-    // ------------------------------------------------------------------
+    // ----------------------------------------------------------------------
+    // Constructor — initialize minimal, colorized CLI logger
+    // ----------------------------------------------------------------------
     Logger::Logger() : spd_(nullptr), mutex_()
     {
         try
         {
-            // Console sink with color output for interactive readability
+            // 1) Colored console sink only (no file sink)
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
             console_sink->set_level(spdlog::level::trace);
 
-            // Rotating file sink: 5 MB per file, keep 3 backups
-            auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-                "vix.log", 1024 * 1024 * 5, 3);
-            file_sink->set_level(spdlog::level::trace);
-
-            // Multi-sink logger combining console and file output
-            spd_ = std::make_shared<spdlog::logger>(
-                "vixLogger", spdlog::sinks_init_list{console_sink, file_sink});
+            // 2) Create the main logger instance
+            spd_ = std::make_shared<spdlog::logger>("vix", console_sink);
             spd_->set_level(spdlog::level::info);
             spd_->flush_on(spdlog::level::warn);
 
-            // Register as default logger for the process
+            // 3) Apply simple colorized CLI pattern
+            // Example:
+            //   [vix][info] Starting build...
+            //   [vix][warn] Missing optional dependency
+            //   [vix][error] Failed to initialize database
+            spd_->set_pattern("[vix][%^%l%$] %v");
+
+            // 4) Set as the global default logger (optional)
             spdlog::set_default_logger(spd_);
         }
         catch (const spdlog::spdlog_ex &ex)
@@ -41,9 +83,9 @@ namespace Vix
         }
     }
 
-    // ------------------------------------------------------------------
-    // setPattern — Change runtime log format pattern
-    // ------------------------------------------------------------------
+    // ----------------------------------------------------------------------
+    // setPattern — allows runtime override of log pattern
+    // ----------------------------------------------------------------------
     void Logger::setPattern(const std::string &pattern)
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -51,69 +93,18 @@ namespace Vix
             spd_->set_pattern(pattern);
     }
 
-    // ------------------------------------------------------------------
-    // setAsync — Toggle between synchronous and asynchronous modes
-    // ------------------------------------------------------------------
+    // ----------------------------------------------------------------------
+    // setAsync — intentionally disabled for CLI usage
+    // ----------------------------------------------------------------------
     void Logger::setAsync(bool enable)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!spd_)
-            return;
-
-        try
-        {
-            if (enable)
-            {
-                // Initialize thread pool if not already
-                if (!spdlog::thread_pool())
-                    spdlog::init_thread_pool(8192, 1);
-
-                // Clone sinks from the current logger
-                auto sinks = spd_->sinks();
-
-                auto async_logger = std::make_shared<spdlog::async_logger>(
-                    "vixLoggerAsync",
-                    sinks.begin(),
-                    sinks.end(),
-                    spdlog::thread_pool(),
-                    spdlog::async_overflow_policy::block);
-
-                async_logger->set_level(spd_->level());
-                async_logger->flush_on(spd_->flush_level());
-                async_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-
-                spd_ = async_logger;
-                spdlog::set_default_logger(spd_);
-                spd_->info("Logger switched to asynchronous mode");
-            }
-            else
-            {
-                // Switch back to synchronous mode
-                auto sinks = spd_->sinks();
-
-                auto sync_logger = std::make_shared<spdlog::logger>(
-                    "vixLogger",
-                    sinks.begin(),
-                    sinks.end());
-
-                sync_logger->set_level(spd_->level());
-                sync_logger->flush_on(spd_->flush_level());
-                sync_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-
-                spd_ = sync_logger;
-                spdlog::set_default_logger(spd_);
-                spd_->info("Logger switched to synchronous mode");
-            }
-        }
-        catch (const std::exception &e)
-        {
-            std::cerr << "[Logger::setAsync] Failed to toggle mode: " << e.what() << std::endl;
-        }
+        // CLI logging is synchronous for immediate feedback.
+        (void)enable;
     }
 
-    // ------------------------------------------------------------------
+    // ----------------------------------------------------------------------
     // Context management (thread-local)
-    // ------------------------------------------------------------------
+    // ----------------------------------------------------------------------
     void Logger::setContext(Context ctx)
     {
         tls_ctx_ = std::move(ctx);
