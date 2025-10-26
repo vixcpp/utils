@@ -42,7 +42,12 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/fmt/ostr.h>
+
+#if defined(SPDLOG_FMT_EXTERNAL)
+#include <fmt/format.h>
+#else
 #include <spdlog/fmt/bundled/format.h>
+#endif
 
 namespace Vix
 {

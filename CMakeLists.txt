@@ -91,19 +91,27 @@ endif()
 
 # ================== Dependencies ==================
 find_package(spdlog REQUIRED)
-# Prefer header-only if available; otherwise use the compiled target.
-if(TARGET spdlog::spdlog_header_only)
-  if(VIX_HEADER_ONLY)
-    target_link_libraries(vix_utils INTERFACE spdlog::spdlog_header_only)
-  else()
-    target_link_libraries(vix_utils PUBLIC spdlog::spdlog_header_only)
-  endif()
+find_package(fmt QUIET) 
+
+set(_VIX_UTILS_SCOPE PUBLIC)
+if(VIX_HEADER_ONLY)
+  set(_VIX_UTILS_SCOPE INTERFACE)
+endif()
+
+if (TARGET spdlog::spdlog_header_only)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog_header_only)
+elseif (TARGET spdlog::spdlog)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog)
 else()
-  if(VIX_HEADER_ONLY)
-    target_link_libraries(vix_utils INTERFACE spdlog::spdlog)
-  else()
-    target_link_libraries(vix_utils PUBLIC spdlog::spdlog)
-  endif()
+  message(FATAL_ERROR "spdlog not found (required)")
+endif()
+
+if (TARGET fmt::fmt)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt)
+elseif (TARGET fmt::fmt-header-only)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt-header-only)
+else()
+  message(STATUS "fmt not found; assuming spdlog provides bundled fmt")
 endif()
 
 # ================== Compiler warnings ==================
