@@ -24,7 +24,7 @@ cmake_minimum_required(VERSION 3.20)
 #   - Header-only mode is supported via VIX_HEADER_ONLY=ON.
 # ====================================================================
 
-project(vix_utils VERSION 0.2.0 LANGUAGES CXX)
+project(vix_utils VERSION 1.4.1 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
