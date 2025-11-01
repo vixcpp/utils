@@ -44,7 +44,7 @@
 #include <vix/utils/Version.hpp>
 #include <iostream>
 
-using namespace Vix::utils;
+using namespace vix::utils;
 
 /**
  * @brief Demonstrates the use of Vix utility modules in a single executable.

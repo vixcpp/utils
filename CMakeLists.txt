@@ -9,15 +9,15 @@ cmake_minimum_required(VERSION 3.20)
 #
 # Targets:
 #   - vix_utils   : Real library target (STATIC by default, or header-only INTERFACE)
-#   - Vix::utils  : Namespaced alias for consumers
+#   - vix::utils  : Namespaced alias for consumers
 #
 # Integration & Install:
 #   - Public headers live under modules/utils/include/...
 #   - This module depends on spdlog for logging.
 #   - The target joins the umbrella export-set `VixTargets` so that
-#     a system-wide installation of Vix exposes Vix::utils via:
+#     a system-wide installation of Vix exposes vix::utils via:
 #       find_package(Vix CONFIG REQUIRED)
-#       target_link_libraries(app PRIVATE Vix::utils)
+#       target_link_libraries(app PRIVATE vix::utils)
 #
 # Notes:
 #   - Sanitizers are inherited from the umbrella if VIX_ENABLE_SANITIZERS=ON.
@@ -58,7 +58,7 @@ string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 # ================== Sources ==================
 if(VIX_HEADER_ONLY)
   add_library(vix_utils INTERFACE)
-  add_library(Vix::utils ALIAS vix_utils)
+  add_library(vix::utils ALIAS vix_utils)
 
   target_include_directories(vix_utils INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -75,7 +75,7 @@ else()
   endif()
 
   add_library(vix_utils STATIC ${UTILS_SOURCES})
-  add_library(Vix::utils ALIAS vix_utils)
+  add_library(vix::utils ALIAS vix_utils)
 
   target_include_directories(vix_utils
     PUBLIC
@@ -207,14 +207,22 @@ install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 
 # ================== Examples (opt-in) ==================
 if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
+  # Dépôt des exécutables dans bin/
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
   add_executable(utils_log_demo         examples/log_demo.cpp)
-  target_link_libraries(utils_log_demo PRIVATE Vix::utils)
+  target_link_libraries(utils_log_demo PRIVATE vix::utils)
 
   add_executable(utils_validation_demo  examples/validation_demo.cpp)
-  target_link_libraries(utils_validation_demo PRIVATE Vix::utils)
+  target_link_libraries(utils_validation_demo PRIVATE vix::utils)
 
   add_executable(utils_env_time_uuid    examples/env_time_uuid.cpp)
-  target_link_libraries(utils_env_time_uuid PRIVATE Vix::utils)
+  target_link_libraries(utils_env_time_uuid PRIVATE vix::utils)
+
+  # Cible groupée pratique
+  add_custom_target(utils_examples ALL
+    DEPENDS utils_log_demo utils_validation_demo utils_env_time_uuid
+  )
 endif()
 
 # ================== Status ==================

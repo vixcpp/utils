@@ -41,7 +41,7 @@
  * @endcode
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     // ---------------------------------------------------------------------
     // Internal helpers
@@ -173,6 +173,6 @@ namespace Vix::utils
             duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
     }
 
-} // namespace Vix::utils
+} // namespace vix::utils
 
 #endif // VIX_TIME_HPP

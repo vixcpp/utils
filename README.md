@@ -36,7 +36,7 @@ It is designed to simplify configuration, logging, and validation with zero runt
 #include <vix/utils/UUID.hpp>
 #include <vix/utils/Version.hpp>
 #include <iostream>
-using namespace Vix::utils;
+using namespace vix::utils;
 
 int main() {
     std::cout << "version=" << version() << "\n";
@@ -63,8 +63,8 @@ uuid4=550e8400-e29b-41d4-a716-446655440000
 #include <vix/utils/Logger.hpp>
 #include <vix/utils/Env.hpp>
 #include <vix/utils/UUID.hpp>
-using namespace Vix::utils;
-using Vix::Logger;
+using namespace vix::utils;
+using vix::Logger;
 
 int main() {
     auto &log = Logger::getInstance();
@@ -99,8 +99,8 @@ int main() {
 #include <vix/utils/Validation.hpp>
 #include <vix/utils/Logger.hpp>
 #include <unordered_map>
-using namespace Vix::utils;
-using Vix::Logger;
+using namespace vix::utils;
+using vix::Logger;
 
 int main() {
     std::unordered_map<std::string, std::string> data{
@@ -153,6 +153,9 @@ int main() {
 git clone https://github.com/vixcpp/utils.git
 cd utils
 cmake -B build -DCMAKE_BUILD_TYPE=Release
+# and examples
+cmake -S . -B build -DVIX_UTILS_BUILD_EXAMPLES=ON
+
 cmake --build build -j$(nproc)
 ```
 

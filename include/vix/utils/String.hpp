@@ -21,7 +21,7 @@
  * @note All functions are exception-free and `noexcept` where applicable.
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     // ---------------------------------------------------------------------
     // Internal helpers
@@ -294,6 +294,6 @@ namespace Vix::utils
         return out;
     }
 
-} // namespace Vix::utils
+} // namespace vix::utils
 
 #endif // VIX_STRING_HPP

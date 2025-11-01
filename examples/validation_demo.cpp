@@ -38,8 +38,8 @@
 #include <iostream>
 #include <unordered_map>
 
-using namespace Vix::utils;
-using Vix::Logger;
+using namespace vix::utils;
+using vix::Logger;
 
 /**
  * @brief Demonstrates form-style validation using the `Validation` utility.

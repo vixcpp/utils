@@ -45,8 +45,8 @@
 #include <vix/utils/UUID.hpp>
 #include <vix/utils/Env.hpp>
 
-using Vix::Logger;
-using namespace Vix::utils;
+using vix::Logger;
+using namespace vix::utils;
 
 /**
  * @brief Demonstrates structured logging and environment-driven configuration.

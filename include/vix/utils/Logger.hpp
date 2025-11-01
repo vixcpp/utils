@@ -49,7 +49,7 @@
 #include <spdlog/fmt/bundled/format.h>
 #endif
 
-namespace Vix
+namespace vix::utils
 {
     /**
      * @class Logger

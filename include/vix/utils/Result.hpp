@@ -44,7 +44,7 @@
  * @tparam E The error type (defaults to std::string).
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     // ---------------------------------------------------------------------
     // Tags for internal construction (OkTag / ErrTag)
@@ -413,6 +413,6 @@ namespace Vix::utils
         Result() = delete;
     };
 
-} // namespace Vix::utils
+} // namespace vix::utils
 
 #endif // VIX_RESULT_HPP

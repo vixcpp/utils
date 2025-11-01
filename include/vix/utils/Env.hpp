@@ -35,7 +35,7 @@
  * @note Works on POSIX and Windows.
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     namespace detail
     {

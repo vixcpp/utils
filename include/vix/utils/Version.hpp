@@ -34,7 +34,7 @@
  * @endcode
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     /**
      * @brief Get the current Vix.cpp version.
@@ -65,6 +65,6 @@ namespace Vix::utils
      * @see version()
      */
     std::string build_info();
-} // namespace Vix::utils
+} // namespace vix::utils
 
 #endif // VIX_VERSION_HPP

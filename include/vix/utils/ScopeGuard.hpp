@@ -35,7 +35,7 @@
  * @endcode
  */
 
-namespace ScopeGuard
+namespace vix::utils
 {
     /**
      * @class ScopeGuard
@@ -174,6 +174,6 @@ namespace ScopeGuard
         return ScopeGuard(std::forward<F>(f));
     }
 
-} // namespace ScopeGuard
+} // namespace vix::utils
 
 #endif // VIX_SCOPE_GUARD_HPP

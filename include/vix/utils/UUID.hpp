@@ -45,7 +45,7 @@
  * @endcode
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     // ---------------------------------------------------------------------
     // RNG helper
@@ -136,6 +136,6 @@ namespace Vix::utils
         return std::string(out.data(), out.size());
     }
 
-} // namespace Vix::utils
+} // namespace vix::utils
 
 #endif // VIX_UUID_HPP

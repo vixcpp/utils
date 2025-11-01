@@ -1,4 +1,4 @@
-#include "vix/utils/Version.hpp"
+#include <vix/utils/Version.hpp>
 
 #ifndef VIX_GIT_HASH
 #define VIX_GIT_HASH "unknown"
@@ -8,7 +8,7 @@
 #define VIX_BUILD_DATE __DATE__ " " __TIME__
 #endif
 
-namespace Vix::utils
+namespace vix::utils
 {
     /**
      * @brief Compose full build information string.

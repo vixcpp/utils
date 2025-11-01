@@ -48,7 +48,7 @@
  * @endcode
  */
 
-namespace Vix::utils
+namespace vix::utils
 {
     /**
      * @brief Field-wise error messages, keyed by field name.
@@ -262,6 +262,6 @@ namespace Vix::utils
         return r;
     }
 
-} // namespace Vix::utils
+} // namespace vix::utils
 
 #endif // VIX_VALIDATION_HPP

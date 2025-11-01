@@ -1,9 +1,9 @@
-#include "vix/utils/Logger.hpp"
+#include <vix/utils/Logger.hpp>
 #include <spdlog/async.h>
 #include <spdlog/async_logger.h>
 #include <spdlog/pattern_formatter.h>
 
-namespace Vix
+namespace vix::utils
 {
     // ------------------------------------------------------------------
     // Thread-local context definition
