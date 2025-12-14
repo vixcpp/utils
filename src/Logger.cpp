@@ -3,7 +3,6 @@
 #include <spdlog/async_logger.h>
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/ansicolor_sink.h>
-#include <spdlog/sinks/ansicolor_sink.h>
 
 namespace vix::utils
 {
@@ -17,7 +16,7 @@ namespace vix::utils
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
             console_sink->set_level(spdlog::level::trace);
 
-            // 🔴 TRÈS IMPORTANT : forcer la couleur même si stdout n'est pas un TTY
+            // forcer la couleur même si stdout n'est pas un TTY
             console_sink->set_color_mode(spdlog::color_mode::always);
 
             // Console : pattern compact, lisible
