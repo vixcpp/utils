@@ -1,40 +1,93 @@
 #include <vix/utils/Logger.hpp>
+
 #include <spdlog/async.h>
 #include <spdlog/async_logger.h>
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/ansicolor_sink.h>
 
+#include <cstdlib>     // std::getenv
+#include <cctype>      // std::tolower
+#include <string>      // std::string
+#include <string_view> // std::string_view
+
 namespace vix::utils
 {
     thread_local Logger::Context Logger::tls_ctx_{};
+
+    static std::string lower_copy(std::string_view in)
+    {
+        std::string out;
+        out.reserve(in.size());
+
+        for (char ch : in)
+        {
+            const auto uc = static_cast<unsigned char>(ch);
+            out.push_back(static_cast<char>(std::tolower(uc)));
+        }
+
+        return out;
+    }
+
+    Logger::Level Logger::parseLevel(std::string_view s)
+    {
+        const auto v = lower_copy(s);
+
+        if (v == "trace")
+            return Level::TRACE;
+        if (v == "debug")
+            return Level::DEBUG;
+        if (v == "info")
+            return Level::INFO;
+        if (v == "warn" || v == "warning")
+            return Level::WARN;
+        if (v == "error")
+            return Level::ERROR;
+        if (v == "critical" || v == "fatal")
+            return Level::CRITICAL;
+
+        return Level::WARN;
+    }
+
+    Logger::Level Logger::parseLevelFromEnv(std::string_view envName, Level fallback)
+    {
+        const std::string key(envName);
+        const char *raw = std::getenv(key.c_str());
+        if (!raw || !*raw)
+            return fallback;
+        return parseLevel(raw);
+    }
+
+    void Logger::setLevelFromEnv(std::string_view envName)
+    {
+        setLevel(parseLevelFromEnv(envName, Level::INFO));
+    }
 
     Logger::Logger() : spd_(nullptr), mutex_()
     {
         try
         {
-            // Console sink — pour l'affichage "runtime"
+            // Console only (no vix.log)
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
             console_sink->set_level(spdlog::level::trace);
-
-            // forcer la couleur même si stdout n'est pas un TTY
             console_sink->set_color_mode(spdlog::color_mode::always);
 
-            // Console : pattern compact, lisible
-            console_sink->set_pattern("[%^%L%$] %v"); // [I] message, [E] message, etc.
-
-            // File sink — pour logs détaillés
-            auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-                "vix.log", 1024 * 1024 * 5, 3);
-            file_sink->set_level(spdlog::level::trace);
-            file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+            // "runtime-like" look (readable, compact):
+            // 15:36:36 [info] message
+            // 15:36:36 [warn] message
+            //
+            // %T = HH:MM:SS
+            // %^%$ = level color
+            // %l = level (info/warn/error)
+            console_sink->set_pattern("\033[90m%T [vix]\033[0m [%^%l%$] \033[2m%v\033[0m");
 
             spd_ = std::make_shared<spdlog::logger>(
-                "vixLogger",
-                spdlog::sinks_init_list{console_sink, file_sink});
-
-            spd_->set_level(spdlog::level::info);
+                "vix",
+                spdlog::sinks_init_list{console_sink});
+            // Default INFO (better UX), override with env VIX_LOG_LEVEL
+            auto lvl = toSpdLevel(parseLevelFromEnv("VIX_LOG_LEVEL", Level::INFO));
+            spd_->set_level(lvl);
+            // flush on warn+ (keep it snappy)
             spd_->flush_on(spdlog::level::warn);
-
             spdlog::set_default_logger(spd_);
         }
         catch (const spdlog::spdlog_ex &ex)
@@ -49,11 +102,8 @@ namespace vix::utils
         if (!spd_)
             return;
 
-        // Applique le pattern à toutes les sinks (console + file)
         for (auto &sink : spd_->sinks())
-        {
             sink->set_pattern(pattern);
-        }
     }
 
     void Logger::setAsync(bool enable)
@@ -64,6 +114,7 @@ namespace vix::utils
 
         try
         {
+            // Keep same sinks and levels when switching
             auto sinks = spd_->sinks();
             auto lvl = spd_->level();
             auto flush = spd_->flush_level();
@@ -74,7 +125,7 @@ namespace vix::utils
                     spdlog::init_thread_pool(8192, 1);
 
                 auto async_logger = std::make_shared<spdlog::async_logger>(
-                    "vixLoggerAsync",
+                    "vix",
                     sinks.begin(),
                     sinks.end(),
                     spdlog::thread_pool(),
@@ -90,7 +141,7 @@ namespace vix::utils
             else
             {
                 auto sync_logger = std::make_shared<spdlog::logger>(
-                    "vixLogger",
+                    "vix",
                     sinks.begin(),
                     sinks.end());
 
@@ -104,8 +155,7 @@ namespace vix::utils
         }
         catch (const std::exception &e)
         {
-            std::cerr << "[Logger::setAsync] Failed to toggle mode: "
-                      << e.what() << std::endl;
+            std::cerr << "[Logger::setAsync] Failed to toggle mode: " << e.what() << std::endl;
         }
     }
 
@@ -123,4 +173,5 @@ namespace vix::utils
     {
         return tls_ctx_;
     }
-}
+
+} // namespace vix::utils
