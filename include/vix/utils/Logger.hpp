@@ -3,22 +3,37 @@
 
 /**
  * @file Logger.hpp
- * @brief Thin, opinionated wrapper around spdlog with context and KV logging.
+ * @brief Thin, opinionated wrapper around spdlog with per-thread context and KV logging.
+ *
+ * - Default output: **console only** (no log file is created).
+ * - Default level: **INFO** (override with `VIX_LOG_LEVEL=trace|debug|info|warn|error|critical`).
+ * - Default pattern (runtime-like): `HH:MM:SS [level] message`
  *
  * Typical usage
  * ```cpp
  * auto &log = vix::utils::Logger::getInstance();
+ *
+ * // Optional: set explicit level (otherwise uses VIX_LOG_LEVEL or defaults to INFO)
  * log.setLevel(vix::utils::Logger::Level::INFO);
- * log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+ *
+ * // Optional: override console pattern
+ * // Example: compact + colored level
+ * log.setPattern("%T [%^%l%$] %v");
+ *
+ * // Optional: async mode
  * log.setAsync(true);
  *
+ * // Per-thread context (request scoped)
  * vix::utils::Logger::Context ctx;
  * ctx.request_id = "r-123";
  * ctx.module = "auth";
+ * ctx.fields["ip"] = "127.0.0.1";
  * log.setContext(ctx);
  *
  * log.info("User {} logged in", user);
- * log.logf(vix::utils::Logger::Level::INFO, "Login ok", "user", user.c_str(), "latency_ms", 12);
+ * log.logf(vix::utils::Logger::Level::INFO, "Login ok",
+ *          "user", user.c_str(),
+ *          "latency_ms", 12);
  * ```
  */
 
@@ -105,7 +120,6 @@ namespace vix::utils
         {
             log(Level::CRITICAL, fmtstr, std::forward<Args>(args)...);
         }
-        // -----------------------------------------------------------------------
 
         template <typename... Args>
         void log(Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
@@ -188,6 +202,10 @@ namespace vix::utils
                 line += " " + k + "=" + v;
             log(level, "{}", line);
         }
+
+        void setLevelFromEnv(std::string_view envName = "VIX_LOG_LEVEL");
+        static Level parseLevel(std::string_view s);
+        static Level parseLevelFromEnv(std::string_view envName = "VIX_LOG_LEVEL", Level fallback = Level::WARN);
 
     private:
         Logger();

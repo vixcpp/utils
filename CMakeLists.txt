@@ -70,7 +70,7 @@ if(VIX_HEADER_ONLY)
   )
 else()
   file(GLOB_RECURSE UTILS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-  if(UTILS_SOURCES STREQUAL "")
+  if(NOT UTILS_SOURCES)
     message(FATAL_ERROR "No sources found under src/. If you want header-only, set VIX_HEADER_ONLY=ON")
   endif()
 
@@ -110,58 +110,27 @@ else()
 endif()
 
 # ================== Compiler warnings ==================
-function(vix_add_flags_if_supported tgt)
-  foreach(flag IN LISTS ARGN)
-    string(REGEX REPLACE "[^A-Za-z0-9]" "_" flag_var "${flag}")
-    set(test_var "HAVE_CXXFLAG_${flag_var}")
-    check_cxx_compiler_flag("${flag}" ${test_var})
-    if(${test_var})
-      target_compile_options(${tgt} PRIVATE "${flag}")
-    endif()
-  endforeach()
-endfunction()
-
-function(vix_apply_warnings tgt)
-  if(MSVC)
-    vix_add_flags_if_supported(${tgt} /W4 /permissive-)
-    if(VIX_STRICT)
-      vix_add_flags_if_supported(${tgt} /WX)
-    endif()
-  else()
-    vix_add_flags_if_supported(${tgt}
-      -Wall -Wextra -Wshadow
-      -Wconversion -Wsign-conversion
-      -Wformat=2 -Wundef
-      -Wnon-virtual-dtor -Woverloaded-virtual
-      -Wnull-dereference -Wdouble-promotion
-      -Wold-style-cast -Wredundant-decls -Wcast-qual -Wcast-align
-      -Weffc++
+if (TARGET vix_warnings)
+  # Umbrella mode: warnings centrally managed at top-level
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_warnings)
+else()
+  # Standalone mode: minimal warnings + suppress common GCC13 spdlog/fmt false positives
+  if (NOT MSVC)
+    target_compile_options(vix_utils PRIVATE
+      -Wall -Wextra -Wpedantic
+      -Wno-array-bounds
+      -Wno-stringop-overflow
     )
-    vix_add_flags_if_supported(${tgt}
-      -Wduplicated-cond -Wduplicated-branches
-      -Wlogical-op -Wuseless-cast -Wno-psabi
-    )
-    vix_add_flags_if_supported(${tgt} -Wno-unknown-warning-option)
-
-    if(VIX_STRICT)
-      vix_add_flags_if_supported(${tgt} -Werror)
-    endif()
   endif()
-endfunction()
 
-if(NOT VIX_HEADER_ONLY)
-  vix_apply_warnings(vix_utils)
+  if (VIX_STRICT AND NOT MSVC)
+    target_compile_options(vix_utils PRIVATE -Werror)
+  endif()
 endif()
 
-# ================== Sanitizers (umbrella-inherited) ==================
-function(vix_utils_apply_sanitizers tgt)
-  if (VIX_ENABLE_SANITIZERS AND NOT VIX_HEADER_ONLY AND TARGET ${tgt})
-    message(STATUS "[utils] enabling sanitizers on ${tgt}")
-    target_compile_options(${tgt} PRIVATE -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined)
-    target_link_options(   ${tgt} PRIVATE                       -fsanitize=address,undefined)
-  endif()
-endfunction()
-vix_utils_apply_sanitizers(vix_utils)
+if (VIX_ENABLE_SANITIZERS AND TARGET vix_sanitizers)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_sanitizers)
+endif()
 
 # ================== LTO (Release) ==================
 if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release")
