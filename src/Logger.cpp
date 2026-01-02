@@ -9,6 +9,9 @@
 #include <cctype>
 #include <string>
 #include <string_view>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 namespace vix::utils
 {
@@ -31,6 +34,9 @@ namespace vix::utils
     Logger::Level Logger::parseLevel(std::string_view s)
     {
         const auto v = lower_copy(s);
+
+        if (v == "off" || v == "never" || v == "none" || v == "silent" || v == "0")
+            return Level::OFF;
 
         if (v == "trace")
             return Level::TRACE;
@@ -211,41 +217,27 @@ namespace vix::utils
         setFormat(parseFormat(raw));
     }
 
-    static bool stdout_is_tty()
+    bool Logger::jsonColorsEnabled()
     {
-#if defined(_WIN32)
-        return true;
-#else
-        return ::isatty(::fileno(stderr)) == 1;
-#endif
-    }
-
-    static bool json_colors_enabled()
-    {
-        if (!stdout_is_tty())
+        if (const char *nc = std::getenv("NO_COLOR"); nc && *nc)
             return false;
 
-        if (const char *no = std::getenv("NO_COLOR"); no && *no)
-            return false;
-
-        // Tu peux réutiliser VIX_COLOR (déjà chez toi)
-        if (const char *v = std::getenv("VIX_COLOR"); v && *v)
+        if (const char *c = std::getenv("VIX_COLOR"); c && *c)
         {
-            std::string s(v);
-            for (auto &c : s)
-                c = static_cast<char>(std::tolower((unsigned char)c));
-            if (s == "never" || s == "0" || s == "false")
+            const std::string v = lower_copy(c);
+
+            if (v == "never" || v == "0" || v == "false")
                 return false;
-            if (s == "always" || s == "1" || s == "true")
+
+            if (v == "always" || v == "1" || v == "true")
                 return true;
         }
 
-        return true; // default ON en TTY
-    }
-
-    bool Logger::jsonColorsEnabled()
-    {
-        return json_colors_enabled();
+#ifndef _WIN32
+        return ::isatty(STDOUT_FILENO) == 1;
+#else
+        return true;
+#endif
     }
 
 } // namespace vix::utils
