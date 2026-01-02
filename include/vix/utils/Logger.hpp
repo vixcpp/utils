@@ -77,7 +77,8 @@ namespace vix::utils
             INFO,
             WARN,
             ERROR,
-            CRITICAL
+            CRITICAL,
+            OFF
         };
 
         enum class Format
@@ -143,12 +144,14 @@ namespace vix::utils
         template <typename... Args>
         void log(Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
         {
+            if (level == Level::OFF)
+                return;
+
             std::lock_guard<std::mutex> lock(mutex_);
             if (!spd_)
                 return;
 
             vix::utils::console_wait_banner();
-
             std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
 
             switch (level)
@@ -171,6 +174,8 @@ namespace vix::utils
             case Level::CRITICAL:
                 spd_->critical(fmtstr, std::forward<Args>(args)...);
                 break;
+            case Level::OFF:
+                return;
             }
         }
 
@@ -274,6 +279,8 @@ namespace vix::utils
                 return spdlog::level::err;
             case Level::CRITICAL:
                 return spdlog::level::critical;
+            case Level::OFF:
+                return spdlog::level::off;
             default:
                 return spdlog::level::info;
             }
@@ -402,6 +409,8 @@ namespace vix::utils
                 return "error";
             case Level::CRITICAL:
                 return "critical";
+            case Level::OFF:
+                return "off";
             default:
                 return "info";
             }
@@ -466,7 +475,6 @@ namespace vix::utils
                 std::string tmp;
                 tmp.reserve(std::string_view(v).size() + 2);
                 tmp += "\"";
-                // escape into tmp
                 std::string escaped;
                 escaped.reserve(std::string_view(v).size() + 8);
                 appendJsonEscaped(escaped, std::string_view(v));
@@ -492,7 +500,6 @@ namespace vix::utils
             }
             else
             {
-                // fallback stringified
                 const std::string s = fmt::format("{}", std::forward<V>(v));
                 std::string escaped;
                 escaped.reserve(s.size() + 8);
@@ -508,6 +515,42 @@ namespace vix::utils
             }
         }
 
+        static std::string c_red(std::string_view s, bool on) { return ansi_wrap("\033[31m", s, on); }
+        static std::string c_blue(std::string_view s, bool on) { return ansi_wrap("\033[34m", s, on); }
+        static std::string c_dim(std::string_view s, bool on) { return ansi_wrap("\033[2m", s, on); }
+
+        template <typename Int>
+        static std::string c_http_status(Int code, bool on)
+        {
+            const int c = static_cast<int>(code);
+            const std::string s = fmt::format("{}", c);
+
+            if (!on)
+                return s;
+
+            if (c >= 200 && c < 300)
+                return ansi_wrap("\033[32m", s, true); // green
+            if (c >= 300 && c < 400)
+                return ansi_wrap("\033[36m", s, true); // cyan
+            if (c >= 400 && c < 500)
+                return ansi_wrap("\033[33m", s, true); // yellow
+            if (c >= 500 && c < 600)
+                return ansi_wrap("\033[31m", s, true); // red
+            return ansi_wrap("\033[90m", s, true);     // gray
+        }
+
+        static bool ends_with(std::string_view s, std::string_view suf)
+        {
+            return s.size() >= suf.size() && s.substr(s.size() - suf.size()) == suf;
+        }
+
+        template <typename V>
+        static bool is_integralish_v()
+        {
+            using T = std::remove_cv_t<std::remove_reference_t<V>>;
+            return std::is_integral_v<T> && !std::is_same_v<T, bool>;
+        }
+
         static void appendJsonPrettyKV(std::string &, bool) {}
 
         template <typename V, typename... Rest>
@@ -517,7 +560,78 @@ namespace vix::utils
             out += c_key(std::string("\"") + k + "\"", color);
             out += c_punc(": ", color);
 
-            appendJsonPrettyValue(out, std::forward<V>(v), color);
+            using T = std::remove_cv_t<std::remove_reference_t<V>>;
+
+            if constexpr (std::is_same_v<T, bool>)
+            {
+                const char *s = v ? "true" : "false";
+                out += c_bool(s, color);
+            }
+            else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
+            {
+                if (std::string_view(k) == "status")
+                {
+                    out += c_http_status(v, color);
+                }
+                else if (std::string_view(k) == "duration_ms" || ends_with(k, "_ms"))
+                {
+                    out += c_dim(c_blue(fmt::format("{}", v), color), color);
+                }
+                else
+                {
+                    out += c_num(fmt::format("{}", v), color);
+                }
+            }
+            else if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>)
+            {
+                std::string escaped;
+                escaped.reserve(std::string_view(v).size() + 8);
+                appendJsonEscaped(escaped, std::string_view(v));
+
+                std::string tmp;
+                tmp.reserve(escaped.size() + 2);
+                tmp += "\"";
+                tmp += escaped;
+                tmp += "\"";
+
+                if (std::string_view(k) == "method" || std::string_view(k) == "path")
+                    out += ansi_wrap("\033[36m", tmp, color);
+                else
+                    out += c_str(tmp, color);
+            }
+            else if constexpr (std::is_same_v<T, const char *> || std::is_same_v<T, char *>)
+            {
+                std::string_view sv = v ? std::string_view(v) : std::string_view("");
+                std::string escaped;
+                escaped.reserve(sv.size() + 8);
+                appendJsonEscaped(escaped, sv);
+
+                std::string tmp;
+                tmp.reserve(escaped.size() + 2);
+                tmp += "\"";
+                tmp += escaped;
+                tmp += "\"";
+
+                if (std::string_view(k) == "method" || std::string_view(k) == "path")
+                    out += ansi_wrap("\033[36m", tmp, color);
+                else
+                    out += c_str(tmp, color);
+            }
+            else
+            {
+                const std::string s = fmt::format("{}", std::forward<V>(v));
+                std::string escaped;
+                escaped.reserve(s.size() + 8);
+                appendJsonEscaped(escaped, s);
+
+                std::string tmp;
+                tmp.reserve(escaped.size() + 2);
+                tmp += "\"";
+                tmp += escaped;
+                tmp += "\"";
+
+                out += c_str(tmp, color);
+            }
 
             out += c_punc(",\n", color);
 
@@ -533,8 +647,6 @@ namespace vix::utils
             std::string out;
             out.reserve(512);
             out += c_punc("{\n", color);
-            if (color)
-                out += "\033[31m";
 
             auto add_str = [&](std::string_view k, std::string_view v)
             {
