@@ -9,6 +9,8 @@
 #include <sstream>
 #include <string>
 
+#include <vix/utils/ConsoleMutex.hpp>
+
 #if !defined(_WIN32)
 #include <unistd.h>
 #include <cstdio>
@@ -55,6 +57,15 @@ namespace vix::utils
 #endif
         }
 
+        static bool stderr_is_tty()
+        {
+#if defined(_WIN32)
+            return true;
+#else
+            return ::isatty(::fileno(stderr)) == 1;
+#endif
+        }
+
         static bool colors_enabled()
         {
             if (const char *no = std::getenv("NO_COLOR"); no && *no)
@@ -95,7 +106,7 @@ namespace vix::utils
             if (const char *no = std::getenv("VIX_NO_HYPERLINK"); no && *no)
                 return false;
 
-            if (!stdout_is_tty())
+            if (!stderr_is_tty())
                 return false;
 
             // safe allowlist
@@ -162,68 +173,76 @@ namespace vix::utils
 
         static void emit_server_ready(const ServerReadyInfo &info)
         {
-            const bool color = colors_enabled();
+            vix::utils::console_reset_banner();
 
+            const bool color = colors_enabled();
             const std::string http_url = make_http_url(info);
             const std::string ws_url = (info.show_ws ? make_ws_url(info) : std::string());
 
             {
-                const std::string t = format_local_time_12h();
+                std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
 
-                if (color)
-                    std::cout << "\033[0m"; // HARD RESET
-
-                std::cout
-                    << (color ? gray(t, true) : t) << "  "
-                    << runtime_identity(info.app, info.mode, color) << "  "
-                    << status_pill(to_upper_copy(info.status), color);
-
-                if (!info.version.empty())
                 {
+                    const std::string t = format_local_time_12h();
+
                     if (color)
-                        std::cout << "  " << bold(white_bright(info.version, true), true);
-                    else
-                        std::cout << "  " << info.version;
+                        std::cerr << "\033[0m";
+
+                    std::cerr
+                        << (color ? gray(t, true) : t) << "  "
+                        << runtime_identity(info.app, info.mode, color) << "  "
+                        << status_pill(to_upper_copy(info.status), color);
+
+                    if (!info.version.empty())
+                    {
+                        if (color)
+                            std::cerr << "  " << bold(white_bright(info.version, true), true);
+                        else
+                            std::cerr << "  " << info.version;
+                    }
+
+                    if (info.ready_ms >= 0)
+                    {
+                        const std::string ms = " (" + std::to_string(info.ready_ms) + " ms)";
+                        std::cerr << (color ? subtle_info(ms, true) : ms);
+                    }
+
+                    if (!info.mode.empty())
+                        std::cerr << "  " << mode_tag(info.mode, color);
+
+                    std::cerr << "\n";
                 }
 
-                if (info.ready_ms >= 0)
+                std::cerr << "\n";
+
+                row(bullet(color), "HTTP:", http_url, false, color);
+
+                if (info.show_ws)
+                    row(bullet(color), "WS:", ws_url, false, color);
+
+                if (!info.config_path.empty())
+                    row(info_mark(color), "Config:", info.config_path, true, color);
+
+                if (info.threads > 0)
                 {
-                    const std::string ms = " (" + std::to_string(info.ready_ms) + " ms)";
-                    std::cout << (color ? subtle_info(ms, true) : ms);
+                    std::string v = std::to_string(info.threads);
+                    if (info.max_threads > 0)
+                        v += "/" + std::to_string(info.max_threads);
+
+                    row(info_mark(color), "Threads:", v, true, color);
                 }
 
-                if (!info.mode.empty())
-                    std::cout << "  " << mode_tag(info.mode, color);
+                row(info_mark(color), "Mode:", pretty_mode(info.mode), true, color);
+                row(info_mark(color), "Status:", pretty_status(info.status), true, color);
 
-                std::cout << "\n";
+                if (info.show_hints)
+                    row(info_mark(color), "Hint:", "Ctrl+C to stop the server", true, color);
+
+                std::cerr << "\n";
+                std::cerr.flush();
             }
 
-            std::cout << "\n";
-
-            row(bullet(color), "HTTP:", http_url, false, color);
-
-            if (info.show_ws)
-                row(bullet(color), "WS:", ws_url, false, color);
-
-            if (!info.config_path.empty())
-                row(info_mark(color), "Config:", info.config_path, true, color);
-
-            if (info.threads > 0)
-            {
-                std::string v = std::to_string(info.threads);
-                if (info.max_threads > 0)
-                    v += "/" + std::to_string(info.max_threads);
-
-                row(info_mark(color), "Threads:", v, true, color);
-            }
-            row(info_mark(color), "Mode:", pretty_mode(info.mode), true, color);
-            row(info_mark(color), "Status:", pretty_status(info.status), true, color);
-
-            if (info.show_hints)
-                row(info_mark(color), "Hint:", "Ctrl+C to stop the server", true, color);
-
-            std::cout << "\n";
-            std::cout.flush();
+            vix::utils::console_mark_banner_done();
         }
 
     private:
@@ -240,7 +259,7 @@ namespace vix::utils
             if (const char *no = std::getenv("VIX_NO_ANIM"); no && *no)
                 return false;
 
-            if (!stdout_is_tty())
+            if (!stderr_is_tty())
                 return false;
 
             if (const char *nc = std::getenv("NO_COLOR"); nc && *nc)
@@ -372,7 +391,7 @@ namespace vix::utils
                         bool color)
         {
             const std::string lbl = pad_label(label);
-            std::cout << "  "
+            std::cerr << "  "
                       << reset_style(icon, color) << " "
                       << (color ? bold(white_bright(lbl, true), true) : lbl)
                       << (dim_value ? dim(value, color) : link(value, color))
