@@ -5,10 +5,10 @@
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/ansicolor_sink.h>
 
-#include <cstdlib>     // std::getenv
-#include <cctype>      // std::tolower
-#include <string>      // std::string
-#include <string_view> // std::string_view
+#include <cstdlib>
+#include <cctype>
+#include <string>
+#include <string_view>
 
 namespace vix::utils
 {
@@ -66,15 +66,10 @@ namespace vix::utils
     {
         try
         {
-            // Console only (no vix.log)
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
             console_sink->set_level(spdlog::level::trace);
             console_sink->set_color_mode(spdlog::color_mode::always);
 
-            // "runtime-like" look (readable, compact):
-            // 15:36:36 [info] message
-            // 15:36:36 [warn] message
-            //
             // %T = HH:MM:SS
             // %^%$ = level color
             // %l = level (info/warn/error)
@@ -83,9 +78,10 @@ namespace vix::utils
             spd_ = std::make_shared<spdlog::logger>(
                 "vix",
                 spdlog::sinks_init_list{console_sink});
-            // Default INFO (better UX), override with env VIX_LOG_LEVEL
+            // Default INFO, override with env VIX_LOG_LEVEL
             auto lvl = toSpdLevel(parseLevelFromEnv("VIX_LOG_LEVEL", Level::INFO));
             spd_->set_level(lvl);
+            setFormatFromEnv("VIX_LOG_FORMAT");
             // flush on warn+ (keep it snappy)
             spd_->flush_on(spdlog::level::warn);
             spdlog::set_default_logger(spd_);
@@ -114,7 +110,6 @@ namespace vix::utils
 
         try
         {
-            // Keep same sinks and levels when switching
             auto sinks = spd_->sinks();
             auto lvl = spd_->level();
             auto flush = spd_->flush_level();
@@ -172,6 +167,48 @@ namespace vix::utils
     Logger::Context Logger::getContext() const
     {
         return tls_ctx_;
+    }
+
+    Logger::Format Logger::parseFormat(std::string_view s)
+    {
+        const auto v = lower_copy(s);
+        if (v == "json")
+            return Format::JSON;
+        if (v == "json-pretty" || v == "pretty-json" || v == "json_pretty")
+            return Format::JSON_PRETTY;
+        return Format::KV;
+    }
+
+    void Logger::setFormat(Format f)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        format_ = f;
+
+        if (!spd_)
+            return;
+
+        if (format_ == Format::JSON || format_ == Format::JSON_PRETTY)
+        {
+            for (auto &sink : spd_->sinks())
+                sink->set_pattern("%v");
+
+            spd_->flush_on(spdlog::level::info);
+            return;
+        }
+
+        for (auto &sink : spd_->sinks())
+            sink->set_pattern("\033[90m%T [vix]\033[0m [%^%l%$] \033[2m%v\033[0m");
+
+        spd_->flush_on(spdlog::level::warn);
+    }
+
+    void Logger::setFormatFromEnv(std::string_view envName)
+    {
+        const std::string key(envName);
+        const char *raw = std::getenv(key.c_str());
+        if (!raw || !*raw)
+            return;
+        setFormat(parseFormat(raw));
     }
 
 } // namespace vix::utils
