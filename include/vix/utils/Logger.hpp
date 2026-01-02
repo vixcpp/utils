@@ -253,6 +253,7 @@ namespace vix::utils
         void setLevelFromEnv(std::string_view envName = "VIX_LOG_LEVEL");
         static Level parseLevel(std::string_view s);
         static Level parseLevelFromEnv(std::string_view envName = "VIX_LOG_LEVEL", Level fallback = Level::WARN);
+        static bool jsonColorsEnabled();
 
     private:
         Logger();
@@ -447,67 +448,117 @@ namespace vix::utils
         }
 
         template <typename V>
-        static void appendJsonPrettyValue(std::string &out, V &&v)
+        static void appendJsonPrettyValue(std::string &out, V &&v, bool color)
         {
             using T = std::remove_cv_t<std::remove_reference_t<V>>;
 
             if constexpr (std::is_same_v<T, bool>)
             {
-                out += (v ? "true" : "false");
+                const char *s = v ? "true" : "false";
+                out += c_bool(s, color);
             }
             else if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>)
             {
-                out += fmt::format("{}", v);
+                out += c_num(fmt::format("{}", v), color);
             }
             else if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>)
             {
-                out += "\"";
-                appendJsonEscaped(out, std::string_view(v));
-                out += "\"";
+                std::string tmp;
+                tmp.reserve(std::string_view(v).size() + 2);
+                tmp += "\"";
+                // escape into tmp
+                std::string escaped;
+                escaped.reserve(std::string_view(v).size() + 8);
+                appendJsonEscaped(escaped, std::string_view(v));
+                tmp += escaped;
+                tmp += "\"";
+
+                out += c_str(tmp, color);
             }
             else if constexpr (std::is_same_v<T, const char *> || std::is_same_v<T, char *>)
             {
-                out += "\"";
-                appendJsonEscaped(out, v ? std::string_view(v) : std::string_view(""));
-                out += "\"";
+                std::string_view sv = v ? std::string_view(v) : std::string_view("");
+                std::string escaped;
+                escaped.reserve(sv.size() + 8);
+                appendJsonEscaped(escaped, sv);
+
+                std::string tmp;
+                tmp.reserve(escaped.size() + 2);
+                tmp += "\"";
+                tmp += escaped;
+                tmp += "\"";
+
+                out += c_str(tmp, color);
             }
             else
             {
-                out += "\"";
-                appendJsonEscaped(out, fmt::format("{}", std::forward<V>(v)));
-                out += "\"";
+                // fallback stringified
+                const std::string s = fmt::format("{}", std::forward<V>(v));
+                std::string escaped;
+                escaped.reserve(s.size() + 8);
+                appendJsonEscaped(escaped, s);
+
+                std::string tmp;
+                tmp.reserve(escaped.size() + 2);
+                tmp += "\"";
+                tmp += escaped;
+                tmp += "\"";
+
+                out += c_str(tmp, color);
             }
         }
 
-        static void appendJsonPrettyKV(std::string &) {}
+        static void appendJsonPrettyKV(std::string &, bool) {}
 
         template <typename V, typename... Rest>
-        static void appendJsonPrettyKV(std::string &out, const char *k, V &&v, Rest &&...rest)
+        static void appendJsonPrettyKV(std::string &out, bool color, const char *k, V &&v, Rest &&...rest)
         {
-            out += "  \"";
-            appendJsonEscaped(out, k);
-            out += "\": ";
-            appendJsonPrettyValue(out, std::forward<V>(v));
-            out += ",\n";
+            out += "  ";
+            out += c_key(std::string("\"") + k + "\"", color);
+            out += c_punc(": ", color);
+
+            appendJsonPrettyValue(out, std::forward<V>(v), color);
+
+            out += c_punc(",\n", color);
 
             if constexpr (sizeof...(rest) > 0)
-                appendJsonPrettyKV(out, std::forward<Rest>(rest)...);
+                appendJsonPrettyKV(out, color, std::forward<Rest>(rest)...);
         }
 
         template <typename... Args>
         std::string buildJsonPretty(Level level, std::string_view msg, Args &&...kvpairs) const
         {
+            const bool color = Logger::jsonColorsEnabled();
+
             std::string out;
             out.reserve(512);
-            out += "{\n";
+            out += c_punc("{\n", color);
+            if (color)
+                out += "\033[31m";
 
             auto add_str = [&](std::string_view k, std::string_view v)
             {
-                out += "  \"";
-                appendJsonEscaped(out, k);
-                out += "\": \"";
-                appendJsonEscaped(out, v);
-                out += "\",\n";
+                std::string kq;
+                kq.reserve(k.size() + 2);
+                kq += "\"";
+                kq.append(k.data(), k.size());
+                kq += "\"";
+
+                std::string escaped;
+                escaped.reserve(v.size() + 8);
+                appendJsonEscaped(escaped, v);
+
+                std::string vq;
+                vq.reserve(escaped.size() + 2);
+                vq += "\"";
+                vq += escaped;
+                vq += "\"";
+
+                out += "  ";
+                out += c_key(kq, color);
+                out += c_punc(": ", color);
+                out += c_str(vq, color);
+                out += c_punc(",\n", color);
             };
 
             add_str("level", levelToString(level));
@@ -522,17 +573,23 @@ namespace vix::utils
             for (const auto &it : c.fields)
                 add_str(it.first, it.second);
 
-            appendJsonPrettyKV(out, std::forward<Args>(kvpairs)...);
+            appendJsonPrettyKV(out, color, std::forward<Args>(kvpairs)...);
 
-            // remove trailing ",\n" if present
-            if (out.size() >= 2 && out.ends_with(",\n"))
+            auto ends_with_plain = [&](const std::string &suf) -> bool
             {
-                out.pop_back(); // \n
-                out.pop_back(); // ,
+                return out.size() >= suf.size() && out.compare(out.size() - suf.size(), suf.size(), suf) == 0;
+            };
+
+            if (ends_with_plain(",\n"))
+            {
+                out.pop_back();
+                out.pop_back();
                 out += "\n";
             }
 
-            out += "}";
+            out += c_punc("}", color);
+            if (color)
+                out += "\033[0m";
             return out;
         }
 
@@ -546,6 +603,25 @@ namespace vix::utils
             if constexpr (sizeof...(rest) > 0)
                 appendJsonKV(out, std::forward<Rest>(rest)...);
         }
+
+        static std::string ansi_wrap(std::string_view code, std::string_view s, bool on)
+        {
+            if (!on)
+                return std::string(s);
+
+            std::string out;
+            out.reserve(code.size() + s.size() + 8);
+            out += code;
+            out.append(s.data(), s.size());
+            out += "\033[0m";
+            return out;
+        }
+
+        static std::string c_key(std::string_view s, bool on) { return ansi_wrap("\033[36m", s, on); }  // cyan
+        static std::string c_str(std::string_view s, bool on) { return ansi_wrap("\033[32m", s, on); }  // green
+        static std::string c_num(std::string_view s, bool on) { return ansi_wrap("\033[33m", s, on); }  // yellow
+        static std::string c_bool(std::string_view s, bool on) { return ansi_wrap("\033[35m", s, on); } // magenta
+        static std::string c_punc(std::string_view s, bool on) { return ansi_wrap("\033[90m", s, on); } // gray
     };
 }
 
