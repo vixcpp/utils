@@ -211,4 +211,41 @@ namespace vix::utils
         setFormat(parseFormat(raw));
     }
 
+    static bool stdout_is_tty()
+    {
+#if defined(_WIN32)
+        return true;
+#else
+        return ::isatty(::fileno(stderr)) == 1;
+#endif
+    }
+
+    static bool json_colors_enabled()
+    {
+        if (!stdout_is_tty())
+            return false;
+
+        if (const char *no = std::getenv("NO_COLOR"); no && *no)
+            return false;
+
+        // Tu peux réutiliser VIX_COLOR (déjà chez toi)
+        if (const char *v = std::getenv("VIX_COLOR"); v && *v)
+        {
+            std::string s(v);
+            for (auto &c : s)
+                c = static_cast<char>(std::tolower((unsigned char)c));
+            if (s == "never" || s == "0" || s == "false")
+                return false;
+            if (s == "always" || s == "1" || s == "true")
+                return true;
+        }
+
+        return true; // default ON en TTY
+    }
+
+    bool Logger::jsonColorsEnabled()
+    {
+        return json_colors_enabled();
+    }
+
 } // namespace vix::utils
