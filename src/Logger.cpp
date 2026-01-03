@@ -123,14 +123,14 @@ namespace vix::utils
             if (enable)
             {
                 if (!spdlog::thread_pool())
-                    spdlog::init_thread_pool(8192, 1);
+                    spdlog::init_thread_pool(262144, 1);
 
                 auto async_logger = std::make_shared<spdlog::async_logger>(
                     "vix",
                     sinks.begin(),
                     sinks.end(),
                     spdlog::thread_pool(),
-                    spdlog::async_overflow_policy::block);
+                    spdlog::async_overflow_policy::overrun_oldest);
 
                 async_logger->set_level(lvl);
                 async_logger->flush_on(flush);
