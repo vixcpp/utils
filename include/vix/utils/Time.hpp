@@ -43,135 +43,115 @@
 
 namespace vix::utils
 {
-    // ---------------------------------------------------------------------
-    // Internal helpers
-    // ---------------------------------------------------------------------
-
-    /**
-     * @brief Convert a `time_t` value to UTC (`std::tm`), thread-safe on all major platforms.
-     *
-     * On POSIX systems uses `gmtime_r`, on Windows `gmtime_s`.
-     * Falls back to non-thread-safe `std::gmtime()` on exotic platforms.
-     *
-     * @param t Time in seconds since the UNIX epoch.
-     * @return `std::tm` structure in UTC.
-     */
-    inline std::tm utc_tm(std::time_t t) noexcept
-    {
-        std::tm tm{};
+  /**
+   * @brief Convert a `time_t` value to UTC (`std::tm`), thread-safe on all major platforms.
+   *
+   * On POSIX systems uses `gmtime_r`, on Windows `gmtime_s`.
+   * Falls back to non-thread-safe `std::gmtime()` on exotic platforms.
+   *
+   * @param t Time in seconds since the UNIX epoch.
+   * @return `std::tm` structure in UTC.
+   */
+  inline std::tm utc_tm(std::time_t t) noexcept
+  {
+    std::tm tm{};
 #if defined(_WIN32)
-        ::gmtime_s(&tm, &t);
+    ::gmtime_s(&tm, &t);
 #elif defined(__unix__) || defined(__APPLE__)
-        ::gmtime_r(&t, &tm);
+    ::gmtime_r(&t, &tm);
 #else
-        // Fallback (non-thread-safe)
-        tm = *std::gmtime(&t);
+    // Fallback (non-thread-safe)
+    tm = *std::gmtime(&t);
 #endif
-        return tm;
-    }
+    return tm;
+  }
 
-    // ---------------------------------------------------------------------
-    // ISO-8601 timestamp
-    // ---------------------------------------------------------------------
+  /**
+   * @brief Get the current UTC time in ISO-8601 format.
+   *
+   * Format: `"YYYY-MM-DDTHH:MM:SSZ"`
+   *
+   * @return Current UTC timestamp as an ISO-8601 string.
+   *
+   * @code
+   * std::string ts = iso8601_now();
+   * // Example: "2025-10-10T14:07:12Z"
+   * @endcode
+   */
+  inline std::string iso8601_now() noexcept
+  {
+    using clock = std::chrono::system_clock;
+    const auto now = clock::now();
+    const time_t t = clock::to_time_t(now);
+    const std::tm tm = utc_tm(t);
 
-    /**
-     * @brief Get the current UTC time in ISO-8601 format.
-     *
-     * Format: `"YYYY-MM-DDTHH:MM:SSZ"`
-     *
-     * @return Current UTC timestamp as an ISO-8601 string.
-     *
-     * @code
-     * std::string ts = iso8601_now();
-     * // Example: "2025-10-10T14:07:12Z"
-     * @endcode
-     */
-    inline std::string iso8601_now() noexcept
-    {
-        using clock = std::chrono::system_clock;
-        const auto now = clock::now();
-        const time_t t = clock::to_time_t(now);
-        const std::tm tm = utc_tm(t);
+    std::ostringstream os;
+    os << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    return os.str();
+  }
 
-        std::ostringstream os;
-        os << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
-        return os.str();
-    }
+  /**
+   * @brief Get the current UTC time in RFC-1123 format (used in HTTP headers).
+   *
+   * Format: `"Wed, 08 Oct 2025 14:07:12 GMT"`
+   *
+   * @return Current UTC timestamp as an RFC-1123 string.
+   *
+   * @code
+   * std::string header = "Date: " + rfc1123_now();
+   * // Example: "Date: Wed, 08 Oct 2025 14:07:12 GMT"
+   * @endcode
+   */
+  inline std::string rfc1123_now() noexcept
+  {
+    using clock = std::chrono::system_clock;
+    const auto now = clock::now();
+    const time_t t = clock::to_time_t(now);
+    const std::tm tm = utc_tm(t);
 
-    // ---------------------------------------------------------------------
-    // RFC-1123 timestamp (HTTP-date)
-    // ---------------------------------------------------------------------
+    std::ostringstream os;
+    os << std::put_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+    return os.str();
+  }
 
-    /**
-     * @brief Get the current UTC time in RFC-1123 format (used in HTTP headers).
-     *
-     * Format: `"Wed, 08 Oct 2025 14:07:12 GMT"`
-     *
-     * @return Current UTC timestamp as an RFC-1123 string.
-     *
-     * @code
-     * std::string header = "Date: " + rfc1123_now();
-     * // Example: "Date: Wed, 08 Oct 2025 14:07:12 GMT"
-     * @endcode
-     */
-    inline std::string rfc1123_now() noexcept
-    {
-        using clock = std::chrono::system_clock;
-        const auto now = clock::now();
-        const time_t t = clock::to_time_t(now);
-        const std::tm tm = utc_tm(t);
+  /**
+   * @brief Get the current monotonic timestamp in milliseconds.
+   *
+   * Uses `std::chrono::steady_clock`, which is **monotonic** and immune to system clock changes.
+   *
+   * @return Milliseconds from an arbitrary starting point.
+   *
+   * @code
+   * auto t1 = now_ms();
+   * do_something();
+   * auto elapsed = now_ms() - t1;
+   * @endcode
+   */
+  inline std::uint64_t now_ms() noexcept
+  {
+    using namespace std::chrono;
+    return static_cast<std::uint64_t>(
+        duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+  }
 
-        std::ostringstream os;
-        os << std::put_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
-        return os.str();
-    }
-
-    // ---------------------------------------------------------------------
-    // Monotonic time
-    // ---------------------------------------------------------------------
-
-    /**
-     * @brief Get the current monotonic timestamp in milliseconds.
-     *
-     * Uses `std::chrono::steady_clock`, which is **monotonic** and immune to system clock changes.
-     *
-     * @return Milliseconds from an arbitrary starting point.
-     *
-     * @code
-     * auto t1 = now_ms();
-     * do_something();
-     * auto elapsed = now_ms() - t1;
-     * @endcode
-     */
-    inline std::uint64_t now_ms() noexcept
-    {
-        using namespace std::chrono;
-        return static_cast<std::uint64_t>(
-            duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
-    }
-
-    // ---------------------------------------------------------------------
-    // UNIX epoch time
-    // ---------------------------------------------------------------------
-
-    /**
-     * @brief Get the current UNIX time in milliseconds since epoch (UTC).
-     *
-     * Uses `std::chrono::system_clock` and is suitable for persisted timestamps,
-     * event logs, or distributed system synchronization.
-     *
-     * @return UNIX epoch timestamp in milliseconds.
-     *
-     * @code
-     * std::uint64_t ts = unix_ms(); // e.g., 1733862450000
-     * @endcode
-     */
-    inline std::uint64_t unix_ms() noexcept
-    {
-        using namespace std::chrono;
-        return static_cast<std::uint64_t>(
-            duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
-    }
+  /**
+   * @brief Get the current UNIX time in milliseconds since epoch (UTC).
+   *
+   * Uses `std::chrono::system_clock` and is suitable for persisted timestamps,
+   * event logs, or distributed system synchronization.
+   *
+   * @return UNIX epoch timestamp in milliseconds.
+   *
+   * @code
+   * std::uint64_t ts = unix_ms(); // e.g., 1733862450000
+   * @endcode
+   */
+  inline std::uint64_t unix_ms() noexcept
+  {
+    using namespace std::chrono;
+    return static_cast<std::uint64_t>(
+        duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
+  }
 
 } // namespace vix::utils
 
