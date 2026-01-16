@@ -1,5 +1,14 @@
 /**
- * @file log_demo.cpp
+ *
+ *  @file log_demo.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
  * @brief Example of using the `Vix::Logger` utility with environment-based configuration.
  *
  * Demonstrates how to configure, contextualize, and use the Vix logging system,
@@ -39,13 +48,13 @@
  * @see Vix::utils::env_bool
  * @see Vix::utils::env_or
  * @see Vix::utils::uuid4
- */
+ **/
 
 #include <vix/utils/Logger.hpp>
 #include <vix/utils/UUID.hpp>
 #include <vix/utils/Env.hpp>
 
-using vix::Logger;
+using vix::utils::Logger;
 using namespace vix::utils;
 
 /**
@@ -61,46 +70,38 @@ using namespace vix::utils;
  */
 int main()
 {
-    // --------------------------------------------------------
-    // Logger instance setup
-    // --------------------------------------------------------
-    auto &log = Logger::getInstance();
+  // Logger instance setup
+  auto &log = Logger::getInstance();
 
-    // Pattern example: [2025-10-10 19:45:12.891] [info] message
-    log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+  // Pattern example: [2025-10-10 19:45:12.891] [info] message
+  log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
 
-    // --------------------------------------------------------
-    // Dynamic configuration from environment variables
-    // --------------------------------------------------------
-    const bool async_mode = env_bool("VIX_LOG_ASYNC", true);
-    log.setAsync(async_mode);
-    log.setLevel(env_bool("VIX_LOG_DEBUG", false)
-                     ? Logger::Level::DEBUG
-                     : Logger::Level::INFO);
+  // Dynamic configuration from environment variables
+  const bool async_mode = env_bool("VIX_LOG_ASYNC", true);
+  log.setAsync(async_mode);
+  log.setLevel(env_bool("VIX_LOG_DEBUG", false)
+                   ? Logger::Level::DEBUG
+                   : Logger::Level::INFO);
 
-    // --------------------------------------------------------
-    // Contextual metadata (useful for distributed tracing)
-    // --------------------------------------------------------
-    Logger::Context cx;
-    cx.request_id = uuid4();
-    cx.module = "log_demo";
-    cx.fields["service"] = "utils";
-    cx.fields["env"] = env_or("APP_ENV", "dev");
-    log.setContext(cx);
+  // Contextual metadata (useful for distributed tracing)
+  Logger::Context cx;
+  cx.request_id = uuid4();
+  cx.module = "log_demo";
+  cx.fields["service"] = "utils";
+  cx.fields["env"] = env_or("APP_ENV", "dev");
+  log.setContext(cx);
 
-    // --------------------------------------------------------
-    // Log examples
-    // --------------------------------------------------------
-    log.log(Logger::Level::INFO, "Hello from utils/log_demo");
-    log.log(Logger::Level::DEBUG, "Debug enabled = {}", env_bool("VIX_LOG_DEBUG", false));
+  // Log examples
+  log.log(Logger::Level::INFO, "Hello from utils/log_demo");
+  log.log(Logger::Level::DEBUG, "Debug enabled = {}", env_bool("VIX_LOG_DEBUG", false));
 
-    // Structured key-value logging
-    log.logf(Logger::Level::INFO, "Boot args", "port", env_int("APP_PORT", 8080), "async", async_mode);
+  // Structured key-value logging
+  log.logf(Logger::Level::INFO, "Boot args", "port", env_int("APP_PORT", 8080), "async", async_mode);
 
-    log.log(Logger::Level::WARN, "This is a warning");
+  log.log(Logger::Level::WARN, "This is a warning");
 
-    // Uncomment for error test
-    // log.throwError("Demo error: {}", "something went wrong");
+  // Uncomment for error test
+  // log.throwError("Demo error: {}", "something went wrong");
 
-    return 0;
+  return 0;
 }

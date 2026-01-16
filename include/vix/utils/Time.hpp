@@ -1,5 +1,18 @@
-#ifndef VIX_TIME_HPP
-#define VIX_TIME_HPP
+/**
+ *
+ *  @file Time.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
+#ifndef VIX_UTILS_TIME_HPP
+#define VIX_UTILS_TIME_HPP
 
 #include <chrono>
 #include <string>
@@ -9,7 +22,6 @@
 #include <cstdint>
 
 /**
- * @file VIX_TIME_HPP
  * @brief Time and date utilities (UTC, ISO-8601, RFC-1123, monotonic, UNIX ms).
  *
  * Provides safe and portable utilities for formatting and retrieving

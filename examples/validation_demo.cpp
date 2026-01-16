@@ -1,5 +1,14 @@
 /**
- * @file validation_demo.cpp
+ *
+ *  @file validation_demo.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
  * @brief Example of using `Vix::utils::validate_map()` with `Logger`.
  *
  * Demonstrates schema-based input validation using the `Vix::utils::Validation`
@@ -39,7 +48,7 @@
 #include <unordered_map>
 
 using namespace vix::utils;
-using vix::Logger;
+using vix::utils::Logger;
 
 /**
  * @brief Demonstrates form-style validation using the `Validation` utility.
@@ -53,45 +62,37 @@ using vix::Logger;
  */
 int main()
 {
-    // --------------------------------------------------------
-    // Input data (simulating form submission)
-    // --------------------------------------------------------
-    std::unordered_map<std::string, std::string> data{
-        {"name", "Gaspard"},
-        {"age", "18"},
-        {"email", "softadastra@example.com"}};
+  // Input data (simulating form submission)
+  std::unordered_map<std::string, std::string> data{
+      {"name", "Gaspard"},
+      {"age", "18"},
+      {"email", "softadastra@example.com"}};
 
-    // --------------------------------------------------------
-    // Schema definition — declarative validation rules
-    // --------------------------------------------------------
-    Schema sch{
-        {"name", required("Name")},
-        {"age", num_range(1, 150, "Age")},
-        {"email", match(R"(^[^@\s]+@[^@\s]+\.[^@\s]+$)", "Email")}};
+  // Schema definition — declarative validation rules
+  Schema sch{
+      {"name", required("Name")},
+      {"age", num_range(1, 150, "Age")},
+      {"email", match(R"(^[^@\s]+@[^@\s]+\.[^@\s]+$)", "Email")}};
 
-    // --------------------------------------------------------
-    // Logger setup (pattern & level)
-    // --------------------------------------------------------
-    auto &log = Logger::getInstance();
-    log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-    log.setLevel(Logger::Level::INFO);
+  // Logger setup (pattern & level)
+  auto &log = Logger::getInstance();
+  log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+  log.setLevel(Logger::Level::INFO);
 
-    // --------------------------------------------------------
-    // Validation process
-    // --------------------------------------------------------
-    const auto r = validate_map(data, sch);
+  // Validation process
+  const auto r = validate_map(data, sch);
 
-    if (r.is_ok())
-    {
-        log.log(Logger::Level::INFO, "Validation OK");
-        return 0;
-    }
+  if (r.is_ok())
+  {
+    log.log(Logger::Level::INFO, "Validation OK");
+    return 0;
+  }
 
-    log.log(Logger::Level::ERROR, "Validation FAILED:");
-    for (const auto &kv : r.error())
-    {
-        log.log(Logger::Level::ERROR, " - {} -> {}", kv.first, kv.second);
-    }
+  log.log(Logger::Level::ERROR, "Validation FAILED:");
+  for (const auto &kv : r.error())
+  {
+    log.log(Logger::Level::ERROR, " - {} -> {}", kv.first, kv.second);
+  }
 
-    return 1;
+  return 1;
 }

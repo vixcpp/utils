@@ -1,3 +1,16 @@
+/**
+ *
+ *  @file Version.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
 #ifndef VIX_VERSION_HPP
 #define VIX_VERSION_HPP
 
@@ -5,7 +18,6 @@
 #include <string_view>
 
 /**
- * @file VIX_VERSION_HPP
  * @brief Version and build information utilities for Vix.cpp.
  *
  * Provides compile-time access to the framework version and

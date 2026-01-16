@@ -1,14 +1,26 @@
-#ifndef VIX_RESULT_HPP
-#define VIX_RESULT_HPP
+/**
+ *
+ *  @file Result.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
+#ifndef VIX_UTILS_RESULT_HPP
+#define VIX_UTILS_RESULT_HPP
 
 #include <string>
 #include <utility>
 #include <type_traits>
-#include <new> // std::launder (C++17)
+#include <new>
 #include <cassert>
 
 /**
- * @file VIX_RESULT_HPP
  * @brief Generic `Result<T, E>` type for error handling without exceptions.
  *
  * This header defines a lightweight `Result<T, E>` class template, inspired by Rust’s
@@ -90,20 +102,15 @@ namespace vix::utils
       E err_;
     };
 
-    // --- Private constructors (internal use only) ---
     explicit Result(OkTag, const T &v) : ok_(true), val_(v) {}
     explicit Result(OkTag, T &&v) : ok_(true), val_(std::move(v)) {}
     explicit Result(ErrTag, const E &e) : ok_(false), err_(e) {}
     explicit Result(ErrTag, E &&e) : ok_(false), err_(std::move(e)) {}
 
   public:
-    /** @brief Creates a successful result. */
     static Result Ok(T v) { return Result(OkTag_v, std::move(v)); }
-
-    /** @brief Creates an error result. */
     static Result Err(E e) { return Result(ErrTag_v, std::move(e)); }
 
-    /** @brief Copy constructor. */
     Result(const Result &o) : ok_(o.ok_)
     {
       if (ok_)
@@ -112,9 +119,9 @@ namespace vix::utils
         ::new (std::addressof(err_)) E(o.err_);
     }
 
-    /** @brief Move constructor. */
-    Result(Result &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
-                                std::is_nothrow_move_constructible_v<E>)
+    Result(Result &&o) noexcept(
+        std::is_nothrow_move_constructible_v<T> &&
+        std::is_nothrow_move_constructible_v<E>)
         : ok_(o.ok_)
     {
       if (ok_)
@@ -123,7 +130,6 @@ namespace vix::utils
         ::new (std::addressof(err_)) E(std::move(o.err_));
     }
 
-    /** @brief Destructor. Destroys only the active union member. */
     ~Result()
     {
       if (ok_)
@@ -132,7 +138,6 @@ namespace vix::utils
         err_.~E();
     }
 
-    /** @brief Copy assignment (strong exception safety). */
     Result &operator=(const Result &o)
     {
       if (this == &o)
@@ -161,7 +166,6 @@ namespace vix::utils
       return *this;
     }
 
-    /** @brief Move assignment (strong exception safety). */
     Result &operator=(Result &&o) noexcept(
         std::is_nothrow_move_assignable_v<T> &&
         std::is_nothrow_move_assignable_v<E> &&
@@ -194,53 +198,36 @@ namespace vix::utils
       return *this;
     }
 
-    /** @return `true` if this Result holds a success value. */
     bool is_ok() const noexcept { return ok_; }
-
-    /** @return `true` if this Result holds an error. */
     bool is_err() const noexcept { return !ok_; }
-
-    /** @return Reference to the success value. Undefined if not Ok. */
     const T &value() const
     {
       assert(ok_);
       return val_;
     }
 
-    /** @return Mutable reference to the success value. */
     T &value()
     {
       assert(ok_);
       return val_;
     }
 
-    /** @return Reference to the error value. Undefined if Ok. */
     const E &error() const
     {
       assert(!ok_);
       return err_;
     }
 
-    /** @return Mutable reference to the error value. */
     E &error()
     {
       assert(!ok_);
       return err_;
     }
 
-    /** @brief Creates a Result directly from a success value. */
     static Result FromOk(const T &v) { return Result(OkTag_v, v); }
-
-    /** @brief Creates a Result directly from a moved success value. */
     static Result FromOk(T &&v) { return Result(OkTag_v, std::move(v)); }
-
-    /** @brief Creates a Result directly from an error. */
     static Result FromErr(const E &e) { return Result(ErrTag_v, e); }
-
-    /** @brief Creates a Result directly from a moved error. */
     static Result FromErr(E &&e) { return Result(ErrTag_v, std::move(e)); }
-
-    /** @brief Deleted default constructor: a Result must be Ok or Err. */
     Result() = delete;
   };
 
@@ -270,13 +257,9 @@ namespace vix::utils
     explicit Result(ErrTag, E &&e) : ok_(false), err_(std::move(e)) {}
 
   public:
-    /** @brief Creates a successful void result. */
     static Result Ok() { return Result(OkTag_v); }
-
-    /** @brief Creates an error result. */
     static Result Err(E e) { return Result(ErrTag_v, std::move(e)); }
 
-    /** @brief Copy constructor. */
     Result(const Result &o) : ok_(o.ok_)
     {
       if (ok_)
@@ -285,7 +268,6 @@ namespace vix::utils
         ::new (std::addressof(err_)) E(o.err_);
     }
 
-    /** @brief Move constructor. */
     Result(Result &&o) noexcept(std::is_nothrow_move_constructible_v<E>)
         : ok_(o.ok_)
     {
@@ -295,14 +277,12 @@ namespace vix::utils
         ::new (std::addressof(err_)) E(std::move(o.err_));
     }
 
-    /** @brief Destructor. */
     ~Result()
     {
       if (!ok_)
         err_.~E();
     }
 
-    /** @brief Copy assignment. */
     Result &operator=(const Result &o)
     {
       if (this == &o)
@@ -310,7 +290,6 @@ namespace vix::utils
 
       if (ok_ && o.ok_)
       {
-        // nothing
       }
       else if (!ok_ && !o.ok_)
       {
@@ -330,16 +309,15 @@ namespace vix::utils
       return *this;
     }
 
-    /** @brief Move assignment. */
-    Result &operator=(Result &&o) noexcept(std::is_nothrow_move_assignable_v<E> &&
-                                           std::is_nothrow_move_constructible_v<E>)
+    Result &operator=(Result &&o) noexcept(
+        std::is_nothrow_move_assignable_v<E> &&
+        std::is_nothrow_move_constructible_v<E>)
     {
       if (this == &o)
         return *this;
 
       if (ok_ && o.ok_)
       {
-        // nothing
       }
       else if (!ok_ && !o.ok_)
       {
@@ -359,27 +337,21 @@ namespace vix::utils
       return *this;
     }
 
-    /** @return `true` if this Result represents success. */
     bool is_ok() const noexcept { return ok_; }
-
-    /** @return `true` if this Result represents an error. */
     bool is_err() const noexcept { return !ok_; }
 
-    /** @return Reference to the error value. Undefined if Ok. */
     const E &error() const
     {
       assert(!ok_);
       return err_;
     }
 
-    /** @return Mutable reference to the error value. */
     E &error()
     {
       assert(!ok_);
       return err_;
     }
 
-    /** @brief Deleted default constructor (must be Ok or Err). */
     Result() = delete;
   };
 

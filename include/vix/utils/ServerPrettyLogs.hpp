@@ -1,3 +1,16 @@
+/**
+ *
+ *  @file ServerPrettyLogs.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
 #ifndef VIX_SERVER_PRETTY_LOGS_HPP
 #define VIX_SERVER_PRETTY_LOGS_HPP
 
@@ -22,7 +35,7 @@ namespace vix::utils
   struct ServerReadyInfo
   {
     // Identity
-    std::string app = "vix";
+    std::string app = "vix.cpp";
     std::string version; // e.g. "Vix.cpp v1.16.1"
     int ready_ms = -1;
     // Mode / status / config
@@ -142,9 +155,10 @@ namespace vix::utils
       return false;
     }
 
-    static std::string osc8_link(const std::string &url,
-                                 const std::string &text,
-                                 bool on)
+    static std::string osc8_link(
+        const std::string &url,
+        const std::string &text,
+        bool on)
     {
       if (!on)
         return text;
@@ -385,11 +399,12 @@ namespace vix::utils
       return 34; // default green
     }
 
-    static void row(const std::string &icon,
-                    const std::string &label,
-                    const std::string &value,
-                    bool dim_value,
-                    bool color)
+    static void row(
+        const std::string &icon,
+        const std::string &label,
+        const std::string &value,
+        bool dim_value,
+        bool color)
     {
       const std::string lbl = pad_label(label);
       std::cerr << "  "

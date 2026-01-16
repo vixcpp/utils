@@ -1,8 +1,20 @@
-#ifndef VIX_LOGGER_HPP
-#define VIX_LOGGER_HPP
+/**
+ *
+ *  @file Logger.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
+#ifndef VIX_UTILS_LOGGER_HPP
+#define VIX_UTILS_LOGGER_HPP
 
 /**
- * @file Logger.hpp
  * @brief Thin, opinionated wrapper around spdlog with per-thread context and KV logging.
  *
  * - Default output: **console only** (no log file is created).

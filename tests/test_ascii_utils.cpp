@@ -65,9 +65,9 @@ int main()
   // to_upper_ascii(char c) : is_upper_ascii(c) ? c - 32 : c;
   assert(ascii::to_upper_ascii('a') == 'A');
   assert(ascii::to_upper_ascii('z') == 'Z');
-  assert(ascii::to_upper_ascii('A') == 'A'); // inchange
-  assert(ascii::to_upper_ascii('!') == '!'); // inchange
-  assert(ascii::to_upper_ascii('0') == '0'); // inchange
+  assert(ascii::to_upper_ascii('A') == 'A');
+  assert(ascii::to_upper_ascii('!') == '!');
+  assert(ascii::to_upper_ascii('0') == '0');
   // to_lower_ascii(char c): is_lower_ascii(c) ? c - ('a' - 'A') : c;
   assert(ascii::to_lower_ascii('A') == 'a');
   assert(ascii::to_lower_ascii('Z') == 'z');
@@ -80,7 +80,7 @@ int main()
   assert(ascii::ascii_code('0') == 48);
   assert(ascii::ascii_code(' ') == 32);
   assert(ascii::ascii_code('~') == 126);
-  // print_ascii_table(char) // affiche le table dans 16 colonnes ou 10 colonnes
+  // print_ascii_table(char)
   ascii::print_ascii_table(16);
   ascii::print_ascii_table(10);
 }

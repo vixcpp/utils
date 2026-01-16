@@ -1,3 +1,16 @@
+/**
+ *
+ *  @file Env.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
 #ifndef VIX_ENV_HPP
 #define VIX_ENV_HPP
 
@@ -218,7 +231,7 @@ namespace vix::utils
     char *endp = nullptr;
     const double v = std::strtod(s.c_str(), &endp);
     if (!endp || *endp != '\0')
-      return def; // invalid (unparsed remainder)
+      return def;
     return v;
   }
 

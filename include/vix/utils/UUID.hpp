@@ -1,5 +1,18 @@
-#ifndef VIX_UUID_HPP
-#define VIX_UUID_HPP
+/**
+ *
+ *  @file UUID.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
+#ifndef VIX_UTILS_UUID_HPP
+#define VIX_UTILS_UUID_HPP
 
 #include <string>
 #include <array>
