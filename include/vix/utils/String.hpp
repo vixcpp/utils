@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <unordered_map>
 
 /**
  * @brief Small string helpers (trim, case transform, prefix/suffix checks, split/join).
@@ -342,6 +343,166 @@ namespace vix::utils
       b.remove_suffix(1);
 
     return std::string(b);
+  }
+
+  inline std::string url_decode(std::string_view in)
+  {
+    std::string out;
+    out.reserve(in.size());
+
+    for (size_t i = 0; i < in.size(); ++i)
+    {
+      const unsigned char c = static_cast<unsigned char>(in[i]);
+      if (c == '+')
+      {
+        out.push_back(' ');
+      }
+      else if (c == '%' && i + 2 < in.size())
+      {
+        auto hex = [](unsigned char ch) -> int
+        {
+          if (ch >= '0' && ch <= '9')
+            return ch - '0';
+          if (ch >= 'a' && ch <= 'f')
+            return 10 + (ch - 'a');
+          if (ch >= 'A' && ch <= 'F')
+            return 10 + (ch - 'A');
+          return -1;
+        };
+
+        int hi = hex(static_cast<unsigned char>(in[i + 1]));
+        int lo = hex(static_cast<unsigned char>(in[i + 2]));
+        if (hi >= 0 && lo >= 0)
+        {
+          out.push_back(static_cast<char>((hi << 4) | lo));
+          i += 2;
+        }
+        else
+        {
+          out.push_back(static_cast<char>(c));
+        }
+      }
+      else
+      {
+        out.push_back(static_cast<char>(c));
+      }
+    }
+
+    return out;
+  }
+
+  inline std::unordered_map<std::string, std::string>
+  parse_query_string(std::string_view qs)
+  {
+    std::unordered_map<std::string, std::string> out;
+
+    size_t pos = 0;
+    while (pos < qs.size())
+    {
+      size_t amp = qs.find('&', pos);
+      if (amp == std::string_view::npos)
+        amp = qs.size();
+
+      std::string_view pair = qs.substr(pos, amp - pos);
+      if (!pair.empty())
+      {
+        size_t eq = pair.find('=');
+        std::string_view key, val;
+        if (eq == std::string_view::npos)
+        {
+          key = pair;
+          val = std::string_view{};
+        }
+        else
+        {
+          key = pair.substr(0, eq);
+          val = pair.substr(eq + 1);
+        }
+
+        auto key_dec = url_decode(key);
+        auto val_dec = url_decode(val);
+        if (!key_dec.empty())
+        {
+          out[std::move(key_dec)] = std::move(val_dec);
+        }
+      }
+
+      if (amp == qs.size())
+        break;
+      pos = amp + 1;
+    }
+
+    return out;
+  }
+
+  inline std::unordered_map<std::string, std::string>
+  extract_params_from_path(const std::string &pattern, std::string_view path)
+  {
+    std::unordered_map<std::string, std::string> params;
+
+    std::size_t rpos = 0;
+    std::size_t ppos = 0;
+
+    while (rpos < pattern.size() && ppos <= path.size())
+    {
+      if (pattern[rpos] == '{')
+      {
+        const std::size_t end_brace = pattern.find('}', rpos);
+        if (end_brace == std::string::npos)
+        {
+          break;
+        }
+
+        const std::string name = pattern.substr(rpos + 1, end_brace - rpos - 1);
+
+        const std::size_t next_slash = path.find('/', ppos);
+        const std::string_view value =
+            (next_slash == std::string_view::npos)
+                ? path.substr(ppos)
+                : path.substr(ppos, next_slash - ppos);
+
+        if (!name.empty())
+        {
+          params.emplace(name, std::string(value));
+        }
+
+        rpos = end_brace + 1;
+        if (next_slash == std::string_view::npos)
+        {
+          ppos = path.size();
+        }
+        else
+        {
+          ppos = next_slash + 1;
+        }
+
+        continue;
+      }
+
+      if (ppos >= path.size() || pattern[rpos] != path[ppos])
+      {
+        return {};
+      }
+
+      ++rpos;
+      ++ppos;
+    }
+
+    while (rpos < pattern.size())
+    {
+      if (pattern[rpos] != '/')
+        return {};
+      ++rpos;
+    }
+
+    while (ppos < path.size())
+    {
+      if (path[ppos] != '/')
+        return {};
+      ++ppos;
+    }
+
+    return params;
   }
 
 } // namespace vix::utils
