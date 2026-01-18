@@ -1,3 +1,16 @@
+/**
+ *
+ *  @file Version.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
 #ifndef VIX_VERSION_HPP
 #define VIX_VERSION_HPP
 
@@ -5,7 +18,6 @@
 #include <string_view>
 
 /**
- * @file VIX_VERSION_HPP
  * @brief Version and build information utilities for Vix.cpp.
  *
  * Provides compile-time access to the framework version and
@@ -36,35 +48,35 @@
 
 namespace vix::utils
 {
-    /**
-     * @brief Get the current Vix.cpp version.
-     *
-     * Returned as a compile-time constant (e.g., `"0.2.0"`).
-     * This version is updated manually in the codebase or via
-     * release automation.
-     *
-     * @return Version string view (semantic version format).
-     */
-    [[nodiscard]] constexpr std::string_view version() noexcept
-    {
-        return "0.2.0";
-    }
+  /**
+   * @brief Get the current Vix.cpp version.
+   *
+   * Returned as a compile-time constant (e.g., `"0.2.0"`).
+   * This version is updated manually in the codebase or via
+   * release automation.
+   *
+   * @return Version string view (semantic version format).
+   */
+  [[nodiscard]] constexpr std::string_view version() noexcept
+  {
+    return "0.2.0";
+  }
 
-    /**
-     * @brief Get the detailed build info (version + Git hash + build date).
-     *
-     * This combines the static version with optional build metadata injected
-     * at compile time via preprocessor macros:
-     * - `VIX_GIT_HASH`
-     * - `VIX_BUILD_DATE`
-     *
-     * If unavailable, defaults to `"unknown"` and the current compile time.
-     *
-     * @return A formatted string like `"v0.2.0 (abcdef1, Oct 10 2025 11:42:00)"`.
-     *
-     * @see version()
-     */
-    std::string build_info();
+  /**
+   * @brief Get the detailed build info (version + Git hash + build date).
+   *
+   * This combines the static version with optional build metadata injected
+   * at compile time via preprocessor macros:
+   * - `VIX_GIT_HASH`
+   * - `VIX_BUILD_DATE`
+   *
+   * If unavailable, defaults to `"unknown"` and the current compile time.
+   *
+   * @return A formatted string like `"v0.2.0 (abcdef1, Oct 10 2025 11:42:00)"`.
+   *
+   * @see version()
+   */
+  std::string build_info();
 } // namespace vix::utils
 
 #endif // VIX_VERSION_HPP

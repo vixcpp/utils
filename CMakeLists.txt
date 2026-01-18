@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 
-# ====================================================================
-# Vix.cpp — Utils Module
-# ====================================================================
+#  @file CMakeLists.cpp
+#  @author Gaspard Kirira
+#
+#  Copyright 2025, Gaspard Kirira.  All rights reserved.
+#  https://github.com/vixcpp/vix
+#  Use of this source code is governed by a MIT license
+#  that can be found in the License file.
+#
+#  Vix.cpp
+#
+# UTILS MODULES
 # Purpose:
 #   Cross-cutting utilities used by other Vix modules and end-user apps:
 #   logging, validation helpers, environment/time/UUID utilities, etc.
@@ -29,19 +37,17 @@ project(vix_utils VERSION 1.5.2 LANGUAGES CXX)
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
 
-# ================== Options ==================
+# Options
 option(VIX_STRICT               "Treat warnings as errors"                  OFF)
 option(VIX_ENABLE_LTO           "Enable link-time optimization (Release)"   OFF)
 option(VIX_HEADER_ONLY          "Build vix_utils as header-only INTERFACE"  OFF)
 option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                      OFF)
-# Sanitizers are inherited from the umbrella via VIX_ENABLE_SANITIZERS
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# ================== Git / Build metadata ==================
-# Use CURRENT_SOURCE_DIR to allow inclusion via add_subdirectory.
+# Git / Build metadata
 execute_process(
   COMMAND git rev-parse --short HEAD
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -55,7 +61,7 @@ endif()
 
 string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 
-# ================== Sources ==================
+# Sources
 if(VIX_HEADER_ONLY)
   add_library(vix_utils INTERFACE)
   add_library(vix::utils ALIAS vix_utils)
@@ -89,9 +95,7 @@ else()
   )
 endif()
 
-# ================== Dependencies ==================
-# spdlog policy: HEADER-ONLY ONLY (safe, no ABI issues)
-
+#  Dependencies
 find_package(spdlog CONFIG QUIET)
 
 set(_VIX_UTILS_SCOPE PUBLIC)
@@ -109,12 +113,10 @@ else()
   )
 endif()
 
-# ================== Compiler warnings ==================
+# Compiler warnings
 if (TARGET vix_warnings)
-  # Umbrella mode: warnings centrally managed at top-level
   target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_warnings)
 else()
-  # Standalone mode: minimal warnings + suppress common GCC13 spdlog/fmt false positives
   if (NOT MSVC)
     target_compile_options(vix_utils PRIVATE
       -Wall -Wextra -Wpedantic
@@ -132,7 +134,7 @@ if (VIX_ENABLE_SANITIZERS AND TARGET vix_sanitizers)
   target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_sanitizers)
 endif()
 
-# ================== LTO (Release) ==================
+# LTO (Release)
 if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release")
   include(CheckIPOSupported)
   check_ipo_supported(RESULT ipo_ok OUTPUT ipo_msg)
@@ -143,7 +145,7 @@ if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
-# ================== Install / Export (umbrella) ==================
+# Install / Export (umbrella)
 set_target_properties(vix_utils PROPERTIES
   EXPORT_NAME utils
   OUTPUT_NAME vix_utils
@@ -153,7 +155,7 @@ set_target_properties(vix_utils PROPERTIES
 
 if(NOT VIX_HEADER_ONLY)
   install(TARGETS vix_utils
-    EXPORT  VixTargets                 # <- join umbrella export-set
+    EXPORT  VixTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -161,7 +163,7 @@ if(NOT VIX_HEADER_ONLY)
   )
 else()
   install(TARGETS vix_utils
-    EXPORT  VixTargets                 # <- even for INTERFACE, export target
+    EXPORT  VixTargets
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   )
 endif()
@@ -169,11 +171,9 @@ endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
 
-# ================== Examples (opt-in) ==================
+# Examples (opt-in)
 if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
-  # Dépôt des exécutables dans bin/
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
   add_executable(utils_log_demo         examples/log_demo.cpp)
   target_link_libraries(utils_log_demo PRIVATE vix::utils)
 
@@ -183,13 +183,12 @@ if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
   add_executable(utils_env_time_uuid    examples/env_time_uuid.cpp)
   target_link_libraries(utils_env_time_uuid PRIVATE vix::utils)
 
-  # Cible groupée pratique
   add_custom_target(utils_examples ALL
     DEPENDS utils_log_demo utils_validation_demo utils_env_time_uuid
   )
 endif()
 
-# ================== Status ==================
+# Status
 if(DEFINED UTILS_SOURCES AND NOT VIX_HEADER_ONLY)
   message(STATUS "Utils library sources: ${UTILS_SOURCES}")
 else()

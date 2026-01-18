@@ -1,5 +1,15 @@
 /**
- * @file utils_demo.cpp
+ *
+ *  @file env_time_uuid.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
  * @brief Example usage of Vix.cpp utility functions.
  *
  * Demonstrates how to use the core utility headers from `vix/utils`,
@@ -60,23 +70,23 @@ using namespace vix::utils;
  */
 int main()
 {
-    // --- Version information ---
-    std::cout << "version=" << version() << "\n";
-    std::cout << "build_info=" << build_info() << "\n";
+  // --- Version information ---
+  std::cout << "version=" << version() << "\n";
+  std::cout << "build_info=" << build_info() << "\n";
 
-    // --- Environment variables ---
-    std::cout << "APP_ENV=" << env_or("APP_ENV", "dev") << "\n";
-    std::cout << "APP_DEBUG=" << (env_bool("APP_DEBUG", false) ? "true" : "false") << "\n";
-    std::cout << "APP_PORT=" << env_int("APP_PORT", 8080) << "\n";
+  // --- Environment variables ---
+  std::cout << "APP_ENV=" << env_or("APP_ENV", "dev") << "\n";
+  std::cout << "APP_DEBUG=" << (env_bool("APP_DEBUG", false) ? "true" : "false") << "\n";
+  std::cout << "APP_PORT=" << env_int("APP_PORT", 8080) << "\n";
 
-    // --- Time utilities ---
-    std::cout << "iso8601_now=" << iso8601_now() << "\n";
-    std::cout << "rfc1123_now=" << rfc1123_now() << "\n";
-    std::cout << "unix_ms=" << unix_ms() << "\n"; // epoch ms (persistable)
-    std::cout << "now_ms=" << now_ms() << "\n";   // steady_clock (durations)
+  // --- Time utilities ---
+  std::cout << "iso8601_now=" << iso8601_now() << "\n";
+  std::cout << "rfc1123_now=" << rfc1123_now() << "\n";
+  std::cout << "unix_ms=" << unix_ms() << "\n"; // epoch ms (persistable)
+  std::cout << "now_ms=" << now_ms() << "\n";   // steady_clock (durations)
 
-    // --- UUID generation ---
-    std::cout << "uuid4=" << uuid4() << "\n";
+  // --- UUID generation ---
+  std::cout << "uuid4=" << uuid4() << "\n";
 
-    return 0;
+  return 0;
 }

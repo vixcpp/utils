@@ -1,5 +1,18 @@
-#ifndef VIX_UUID_HPP
-#define VIX_UUID_HPP
+/**
+ *
+ *  @file UUID.hpp
+ *  @author Gaspard Kirira
+ *
+ *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  https://github.com/vixcpp/vix
+ *  Use of this source code is governed by a MIT license
+ *  that can be found in the License file.
+ *
+ *  Vix.cpp
+ *
+ */
+#ifndef VIX_UTILS_UUID_HPP
+#define VIX_UTILS_UUID_HPP
 
 #include <string>
 #include <array>
@@ -47,94 +60,86 @@
 
 namespace vix::utils
 {
-    // ---------------------------------------------------------------------
-    // RNG helper
-    // ---------------------------------------------------------------------
-
-    /**
-     * @brief Thread-local random number generator for UUID generation.
-     *
-     * Seeds the RNG once per thread by combining:
-     * - `std::random_device` entropy
-     * - High-resolution clock timestamp
-     *
-     * This approach ensures unique sequences even on systems where
-     * `std::random_device` is deterministic.
-     *
-     * @return Reference to a thread-local `std::mt19937_64` instance.
-     */
-    inline std::mt19937_64 &uuid_rng() noexcept
-    {
-        thread_local std::mt19937_64 rng([]
-                                         {
+  /**
+   * @brief Thread-local random number generator for UUID generation.
+   *
+   * Seeds the RNG once per thread by combining:
+   * - `std::random_device` entropy
+   * - High-resolution clock timestamp
+   *
+   * This approach ensures unique sequences even on systems where
+   * `std::random_device` is deterministic.
+   *
+   * @return Reference to a thread-local `std::mt19937_64` instance.
+   */
+  inline std::mt19937_64 &uuid_rng() noexcept
+  {
+    thread_local std::mt19937_64 rng([]
+                                     {
             // Mix entropy and time to strengthen seed uniqueness
             std::random_device rd;
             auto mix = (static_cast<std::uint64_t>(rd()) << 32)
                        ^ static_cast<std::uint64_t>(
                            std::chrono::high_resolution_clock::now().time_since_epoch().count());
             return std::mt19937_64{mix}; }());
-        return rng;
-    }
+    return rng;
+  }
 
-    // ---------------------------------------------------------------------
-    // UUID v4 generator
-    // ---------------------------------------------------------------------
+  /**
+   * @brief Generate a random UUID version 4 (RFC 4122).
+   *
+   * Fills a 16-byte array with random data, sets the version and variant bits,
+   * and returns a canonical string of the form `"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"`.
+   *
+   * ### Algorithm
+   * 1. Generate 16 random bytes.
+   * 2. Apply version (`0100` for v4) and variant (`10xxxxxx`).
+   * 3. Format into lowercase hex with dashes at positions 8, 13, 18, 23.
+   *
+   * @return A 36-character lowercase UUID v4 string.
+   *
+   * @code
+   * std::string id = Vix::utils::uuid4();
+   * // Example: "550e8400-e29b-41d4-a716-446655440000"
+   * @endcode
+   */
+  inline std::string uuid4() noexcept
+  {
+    // 16 random bytes
+    std::array<std::uint8_t, 16> b{};
+    auto &rng = uuid_rng();
+    std::uniform_int_distribution<std::uint32_t> dist32(0, 0xFFFFFFFFu);
 
-    /**
-     * @brief Generate a random UUID version 4 (RFC 4122).
-     *
-     * Fills a 16-byte array with random data, sets the version and variant bits,
-     * and returns a canonical string of the form `"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"`.
-     *
-     * ### Algorithm
-     * 1. Generate 16 random bytes.
-     * 2. Apply version (`0100` for v4) and variant (`10xxxxxx`).
-     * 3. Format into lowercase hex with dashes at positions 8, 13, 18, 23.
-     *
-     * @return A 36-character lowercase UUID v4 string.
-     *
-     * @code
-     * std::string id = Vix::utils::uuid4();
-     * // Example: "550e8400-e29b-41d4-a716-446655440000"
-     * @endcode
-     */
-    inline std::string uuid4() noexcept
+    // Fill 4 bytes per iteration
+    for (std::size_t i = 0; i < 16; i += 4)
     {
-        // 16 random bytes
-        std::array<std::uint8_t, 16> b{};
-        auto &rng = uuid_rng();
-        std::uniform_int_distribution<std::uint32_t> dist32(0, 0xFFFFFFFFu);
-
-        // Fill 4 bytes per iteration
-        for (std::size_t i = 0; i < 16; i += 4)
-        {
-            std::uint32_t r = dist32(rng);
-            b[i + 0] = static_cast<std::uint8_t>((r >> 24) & 0xFF);
-            b[i + 1] = static_cast<std::uint8_t>((r >> 16) & 0xFF);
-            b[i + 2] = static_cast<std::uint8_t>((r >> 8) & 0xFF);
-            b[i + 3] = static_cast<std::uint8_t>((r >> 0) & 0xFF);
-        }
-
-        // RFC 4122 — version & variant
-        b[6] = static_cast<std::uint8_t>((b[6] & 0x0F) | 0x40); // version 4
-        b[8] = static_cast<std::uint8_t>((b[8] & 0x3F) | 0x80); // variant 10xxxxxx
-
-        // Format as "8-4-4-4-12" hex string (lowercase)
-        static constexpr char hexdig[] = "0123456789abcdef";
-        std::array<char, 36> out{};
-        std::size_t oi = 0;
-        for (std::size_t i = 0; i < 16; ++i)
-        {
-            // Insert dashes at UUID canonical positions
-            if (oi == 8 || oi == 13 || oi == 18 || oi == 23)
-                out[oi++] = '-';
-
-            out[oi++] = hexdig[static_cast<std::size_t>((b[i] >> 4) & 0x0F)];
-            out[oi++] = hexdig[static_cast<std::size_t>((b[i] >> 0) & 0x0F)];
-        }
-
-        return std::string(out.data(), out.size());
+      std::uint32_t r = dist32(rng);
+      b[i + 0] = static_cast<std::uint8_t>((r >> 24) & 0xFF);
+      b[i + 1] = static_cast<std::uint8_t>((r >> 16) & 0xFF);
+      b[i + 2] = static_cast<std::uint8_t>((r >> 8) & 0xFF);
+      b[i + 3] = static_cast<std::uint8_t>((r >> 0) & 0xFF);
     }
+
+    // RFC 4122 — version & variant
+    b[6] = static_cast<std::uint8_t>((b[6] & 0x0F) | 0x40); // version 4
+    b[8] = static_cast<std::uint8_t>((b[8] & 0x3F) | 0x80); // variant 10xxxxxx
+
+    // Format as "8-4-4-4-12" hex string (lowercase)
+    static constexpr char hexdig[] = "0123456789abcdef";
+    std::array<char, 36> out{};
+    std::size_t oi = 0;
+    for (std::size_t i = 0; i < 16; ++i)
+    {
+      // Insert dashes at UUID canonical positions
+      if (oi == 8 || oi == 13 || oi == 18 || oi == 23)
+        out[oi++] = '-';
+
+      out[oi++] = hexdig[static_cast<std::size_t>((b[i] >> 4) & 0x0F)];
+      out[oi++] = hexdig[static_cast<std::size_t>((b[i] >> 0) & 0x0F)];
+    }
+
+    return std::string(out.data(), out.size());
+  }
 
 } // namespace vix::utils
 
