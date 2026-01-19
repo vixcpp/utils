@@ -353,9 +353,13 @@ namespace vix::utils
       if (!color)
         return "[" + app + "]";
 
+      std::string name = app;
+      if (name == "vix.cpp" || name == "VIX.cpp" || name == "Vix.cpp")
+        name = "Vix.cpp";
+
       const std::string icon = runtime_icon(mode, true);
-      const std::string name = bold(wrap("\033[32m", "VIX", true), true);
-      return icon + " " + name;
+      const std::string styled = bold(wrap("\033[32m", name, true), true);
+      return icon + " " + styled;
     }
 
     static std::string status_pill(const std::string &status_upper, bool color)
