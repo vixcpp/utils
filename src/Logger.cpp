@@ -150,7 +150,6 @@ namespace vix::utils
 
         spd_ = async_logger;
         spdlog::set_default_logger(spd_);
-        spd_->debug("Logger switched to async mode");
       }
       else
       {

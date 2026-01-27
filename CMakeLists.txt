@@ -95,8 +95,28 @@ else()
   )
 endif()
 
-#  Dependencies
+# Dependencies (robust): spdlog header-only (fallback FetchContent)
+include(FetchContent)
+
 find_package(spdlog CONFIG QUIET)
+
+if (NOT TARGET spdlog::spdlog_header_only)
+  message(STATUS "[utils] spdlog::spdlog_header_only not found -> fetching spdlog (header-only)")
+
+  FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.14.1
+  )
+
+  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_BENCH   OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_FMT_EXTERNAL  OFF CACHE BOOL "" FORCE)
+
+  FetchContent_MakeAvailable(spdlog)
+endif()
 
 set(_VIX_UTILS_SCOPE PUBLIC)
 if(VIX_HEADER_ONLY)
@@ -107,11 +127,9 @@ if (TARGET spdlog::spdlog_header_only)
   target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog_header_only)
   target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE} SPDLOG_HEADER_ONLY=1)
 else()
-  message(FATAL_ERROR
-    "spdlog::spdlog_header_only not found. "
-    "Vix requires header-only spdlog to avoid ABI issues."
-  )
+  message(FATAL_ERROR "spdlog::spdlog_header_only still missing after fallback.")
 endif()
+
 
 # Compiler warnings
 if (TARGET vix_warnings)
