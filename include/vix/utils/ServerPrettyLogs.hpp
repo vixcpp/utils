@@ -3,8 +3,10 @@
  *  @file ServerPrettyLogs.hpp
  *  @author Gaspard Kirira
  *
- *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  Copyright 2025, Gaspard Kirira.
+ *  All rights reserved.
  *  https://github.com/vixcpp/vix
+ *
  *  Use of this source code is governed by a MIT license
  *  that can be found in the License file.
  *
@@ -32,36 +34,114 @@
 
 namespace vix::utils
 {
+  /**
+   * @struct ServerReadyInfo
+   * @brief Configuration and metadata used to print the runtime ready banner.
+   *
+   * This structure holds the information displayed by RuntimeBanner::emit_server_ready(),
+   * including application identity, mode/status, HTTP and WebSocket endpoints, and
+   * optional hints such as thread counts.
+   */
   struct ServerReadyInfo
   {
-    // Identity
+    /// Application name displayed in the banner.
     std::string app = "vix.cpp";
-    std::string version; // e.g. "Vix.cpp v1.16.1"
+
+    /**
+     * @brief Optional version string displayed next to the identity.
+     *
+     * Example: "Vix.cpp v1.16.1"
+     */
+    std::string version;
+
+    /**
+     * @brief Startup time in milliseconds.
+     *
+     * When set to a value >= 0, it is displayed as "(X ms)".
+     */
     int ready_ms = -1;
-    // Mode / status / config
+
+    /**
+     * @brief Runtime mode.
+     *
+     * Typically "run" or "dev".
+     */
     std::string mode = "";
-    std::string status = "ready"; // "ready" | "listening" | "running"
-    std::string config_path;      // "/path/to/config.json"
-    // HTTP
+
+    /**
+     * @brief Runtime status label.
+     *
+     * Common values: "ready", "listening", "running".
+     */
+    std::string status = "ready";
+
+    /**
+     * @brief Path to the configuration file (optional).
+     *
+     * Example: "/path/to/config.json"
+     */
+    std::string config_path;
+
+    /// HTTP hostname displayed in the banner.
     std::string host = "localhost";
+
+    /// HTTP port displayed in the banner.
     int port = 8080;
+
+    /// HTTP scheme displayed in the banner (e.g. "http" or "https").
     std::string scheme = "http";
+
+    /// Base path for HTTP routes (e.g. "/").
     std::string base_path = "/";
-    // WS
+
+    /// Whether the WebSocket row should be shown.
     bool show_ws = true;
+
+    /// WebSocket port.
     int ws_port = 9090;
+
+    /// WebSocket scheme (e.g. "ws" or "wss").
     std::string ws_scheme = "ws";
+
+    /// WebSocket hostname.
     std::string ws_host = "localhost";
+
+    /// WebSocket path (e.g. "/").
     std::string ws_path = "/";
-    // Hints
+
+    /// Whether "Hint: Ctrl+C ..." should be shown.
     bool show_hints = true;
+
+    /// Current thread count (optional).
     std::size_t threads = 0;
+
+    /// Maximum thread count (optional).
     std::size_t max_threads = 0;
   };
 
+  /**
+   * @class RuntimeBanner
+   * @brief Pretty runtime banner printed to stderr when the server is ready.
+   *
+   * Provides:
+   * - terminal capability checks (TTY, colors, animations)
+   * - OSC 8 hyperlinks when supported
+   * - a single entry point RuntimeBanner::emit_server_ready()
+   *
+   * Threading:
+   * - Uses vix::utils::console_mutex() to serialize output so banner lines do not
+   *   interleave across threads.
+   * - Uses vix::utils::console_reset_banner(), console_mark_banner_done(), and
+   *   related primitives for banner synchronization.
+   */
   class RuntimeBanner final
   {
   public:
+    /**
+     * @brief Return true if stdout is a TTY.
+     *
+     * On Windows, this currently returns true.
+     */
     static bool stdout_is_tty()
     {
 #if defined(_WIN32)
@@ -71,6 +151,11 @@ namespace vix::utils
 #endif
     }
 
+    /**
+     * @brief Return true if stderr is a TTY.
+     *
+     * On Windows, this currently returns true.
+     */
     static bool stderr_is_tty()
     {
 #if defined(_WIN32)
@@ -80,6 +165,18 @@ namespace vix::utils
 #endif
     }
 
+    /**
+     * @brief Determine whether colored output is enabled.
+     *
+     * Rules:
+     * - If NO_COLOR is set (and non-empty): colors are disabled.
+     * - If VIX_COLOR is set:
+     *   - "never|0|false" disables colors
+     *   - "always|1|true" enables colors
+     * - Otherwise: enabled by default.
+     *
+     * @return True if ANSI colors should be used.
+     */
     static bool colors_enabled()
     {
       if (const char *no = std::getenv("NO_COLOR"); no && *no)
@@ -97,9 +194,18 @@ namespace vix::utils
           return true;
       }
 
-      return true; // default ON
+      return true;
     }
 
+    /**
+     * @brief Derive runtime mode from environment.
+     *
+     * Reads VIX_MODE and normalizes it:
+     * - "dev|watch|reload" -> "dev"
+     * - anything else -> "run"
+     *
+     * @return Mode string ("dev" or "run").
+     */
     static std::string mode_from_env()
     {
       const char *v = std::getenv("VIX_MODE");
@@ -115,6 +221,17 @@ namespace vix::utils
       return "run";
     }
 
+    /**
+     * @brief Determine if terminal hyperlinks (OSC 8) are enabled.
+     *
+     * Rules:
+     * - Disabled if VIX_NO_HYPERLINK is set (and non-empty).
+     * - Requires stderr to be a TTY.
+     * - Enabled for a conservative allowlist of terminals.
+     * - Typically disabled for tmux/screen.
+     *
+     * @return True if OSC 8 links can be emitted.
+     */
     static bool hyperlinks_enabled()
     {
       if (const char *no = std::getenv("VIX_NO_HYPERLINK"); no && *no)
@@ -123,7 +240,6 @@ namespace vix::utils
       if (!stderr_is_tty())
         return false;
 
-      // safe allowlist
       if (std::getenv("VSCODE_PID"))
         return true;
       if (std::getenv("WT_SESSION"))
@@ -144,7 +260,6 @@ namespace vix::utils
       if (std::getenv("VTE_VERSION"))
         return true;
 
-      // tmux/screen: usually OFF
       if (const char *term = std::getenv("TERM"))
       {
         std::string t(term);
@@ -155,6 +270,14 @@ namespace vix::utils
       return false;
     }
 
+    /**
+     * @brief Build an OSC 8 hyperlink string if enabled.
+     *
+     * @param url Link target.
+     * @param text Display text.
+     * @param on Whether OSC 8 should be emitted.
+     * @return Hyperlink-wrapped text if enabled, otherwise `text`.
+     */
     static std::string osc8_link(
         const std::string &url,
         const std::string &text,
@@ -186,6 +309,17 @@ namespace vix::utils
       return out;
     }
 
+    /**
+     * @brief Print the runtime "ready" banner to stderr.
+     *
+     * This function:
+     * - resets the banner state (for coordination with other threads)
+     * - serializes output using vix::utils::console_mutex()
+     * - prints time, identity, status, URLs, config, threads, mode/status, hints
+     * - marks the banner as done and notifies waiting threads
+     *
+     * @param info Banner information (endpoints, labels, timing, etc.).
+     */
     static void emit_server_ready(const ServerReadyInfo &info)
     {
       vix::utils::console_reset_banner();
@@ -261,7 +395,18 @@ namespace vix::utils
     }
 
   private:
+    /**
+     * @brief Label width used to align banner rows.
+     */
     static constexpr std::size_t LABEL_WIDTH = 8;
+
+    /**
+     * @brief Apply a subtle accent color to informational text.
+     *
+     * @param s Input string.
+     * @param on Whether coloring is enabled.
+     * @return Styled or raw string.
+     */
     static std::string subtle_info(const std::string &s, bool on)
     {
       if (!on)
@@ -269,6 +414,16 @@ namespace vix::utils
       return "\033[38;5;110m" + s + "\033[0m";
     }
 
+    /**
+     * @brief Determine whether banner animations are enabled.
+     *
+     * Rules:
+     * - Disabled if VIX_NO_ANIM is set (and non-empty)
+     * - Requires stderr to be a TTY
+     * - Disabled if NO_COLOR is set (and non-empty)
+     *
+     * @return True if small animations may be shown.
+     */
     static bool animations_enabled()
     {
       if (const char *no = std::getenv("VIX_NO_ANIM"); no && *no)
@@ -283,6 +438,13 @@ namespace vix::utils
       return true;
     }
 
+    /**
+     * @brief Compute a repeating phase value in range [0..2].
+     *
+     * Used to animate the "dev" tag background color.
+     *
+     * @return Phase 0, 1, or 2.
+     */
     static int pulse_phase_0_2()
     {
       using namespace std::chrono;
@@ -291,6 +453,12 @@ namespace vix::utils
       return static_cast<int>(t);
     }
 
+    /**
+     * @brief Build an animated "[dev]" tag when color and animations are enabled.
+     *
+     * @param color Whether color output is enabled.
+     * @return Styled dev tag.
+     */
     static std::string dev_tag_animated(bool color)
     {
       if (!color || !animations_enabled())
@@ -312,6 +480,12 @@ namespace vix::utils
       return out;
     }
 
+    /**
+     * @brief Build a "[run]" tag.
+     *
+     * @param color Whether color output is enabled.
+     * @return Styled run tag.
+     */
     static std::string run_tag(bool color)
     {
       if (!color)
@@ -327,6 +501,13 @@ namespace vix::utils
       return out;
     }
 
+    /**
+     * @brief Select the correct mode tag for the given mode.
+     *
+     * @param mode Mode string (typically "dev" or "run").
+     * @param color Whether color output is enabled.
+     * @return Styled mode tag.
+     */
     static std::string mode_tag(const std::string &mode, bool color)
     {
       if (mode == "dev")
@@ -334,11 +515,26 @@ namespace vix::utils
       return run_tag(color);
     }
 
+    /**
+     * @brief Return true if the given mode is considered "dev".
+     *
+     * @param mode Mode string.
+     * @return True if dev.
+     */
     static bool is_dev_mode(const std::string &mode)
     {
       return mode == "dev";
     }
 
+    /**
+     * @brief Select the runtime icon based on the mode.
+     *
+     * Dev uses a diamond "◆", run uses a dot "●".
+     *
+     * @param mode Mode string.
+     * @param color Whether color output is enabled.
+     * @return Styled icon string.
+     */
     static std::string runtime_icon(const std::string &mode, bool color)
     {
       const bool dev = is_dev_mode(mode);
@@ -348,6 +544,16 @@ namespace vix::utils
       return wrap("\033[32m", icon, true);
     }
 
+    /**
+     * @brief Build the application identity string.
+     *
+     * Normalizes common variants of "Vix.cpp" to the canonical display name.
+     *
+     * @param app Application name.
+     * @param mode Mode string.
+     * @param color Whether color output is enabled.
+     * @return Styled identity string.
+     */
     static std::string runtime_identity(const std::string &app, const std::string &mode, bool color)
     {
       if (!color)
@@ -362,6 +568,13 @@ namespace vix::utils
       return icon + " " + styled;
     }
 
+    /**
+     * @brief Render a colored pill for the given status.
+     *
+     * @param status_upper Uppercase status label (e.g. "READY").
+     * @param color Whether color output is enabled.
+     * @return Styled pill string.
+     */
     static std::string status_pill(const std::string &status_upper, bool color)
     {
       if (!color)
@@ -386,23 +599,38 @@ namespace vix::utils
       return out;
     }
 
+    /**
+     * @brief Choose a background color code for the status pill.
+     *
+     * @param status_upper Uppercase status string.
+     * @return ANSI 256-color background code.
+     */
     static int status_bg_color_code(const std::string &status_upper)
     {
       if (status_upper == "READY")
-        return 34; // green
+        return 34;
 
       if (status_upper == "RUNNING" || status_upper == "LISTENING")
-        return 35; // green/teal
+        return 35;
 
       if (status_upper == "WARN" || status_upper == "WARNING")
-        return 214; // orange
+        return 214;
 
       if (status_upper == "ERROR" || status_upper == "FAILED")
-        return 196; // red
+        return 196;
 
-      return 34; // default green
+      return 34;
     }
 
+    /**
+     * @brief Emit one aligned row in the banner.
+     *
+     * @param icon Left icon (bullet or info mark).
+     * @param label Row label (e.g. "HTTP:").
+     * @param value Row value (e.g. URL).
+     * @param dim_value Whether to dim the value (instead of making it a link).
+     * @param color Whether color output is enabled.
+     */
     static void row(
         const std::string &icon,
         const std::string &label,
@@ -418,6 +646,12 @@ namespace vix::utils
                 << "\n";
     }
 
+    /**
+     * @brief Pad a label to a fixed width for alignment.
+     *
+     * @param s Label string.
+     * @return Padded label string.
+     */
     static std::string pad_label(const std::string &s)
     {
       if (s.size() >= LABEL_WIDTH)
@@ -425,6 +659,13 @@ namespace vix::utils
       return s + std::string(LABEL_WIDTH - s.size(), ' ');
     }
 
+    /**
+     * @brief Format the local time in 12-hour format with seconds.
+     *
+     * Output example: "11:07:57 PM"
+     *
+     * @return Local time string.
+     */
     static std::string format_local_time_12h()
     {
       using clock = std::chrono::system_clock;
@@ -452,6 +693,14 @@ namespace vix::utils
       return oss.str();
     }
 
+    /**
+     * @brief Build the HTTP URL from the provided ServerReadyInfo.
+     *
+     * Ensures the base path is prefixed with '/'.
+     *
+     * @param i ServerReadyInfo.
+     * @return HTTP URL string.
+     */
     static std::string make_http_url(const ServerReadyInfo &i)
     {
       std::ostringstream oss;
@@ -470,6 +719,14 @@ namespace vix::utils
       return oss.str();
     }
 
+    /**
+     * @brief Build the WebSocket URL from the provided ServerReadyInfo.
+     *
+     * Ensures the path is prefixed with '/' when non-empty.
+     *
+     * @param i ServerReadyInfo.
+     * @return WebSocket URL string.
+     */
     static std::string make_ws_url(const ServerReadyInfo &i)
     {
       std::ostringstream oss;
@@ -484,6 +741,12 @@ namespace vix::utils
       return oss.str();
     }
 
+    /**
+     * @brief Convert a string to uppercase (ASCII).
+     *
+     * @param s Input string.
+     * @return Uppercased copy.
+     */
     static std::string to_upper_copy(std::string s)
     {
       for (auto &c : s)
@@ -491,6 +754,12 @@ namespace vix::utils
       return s;
     }
 
+    /**
+     * @brief Human-friendly mode label shown in the banner.
+     *
+     * @param mode Mode string.
+     * @return Pretty mode text.
+     */
     static std::string pretty_mode(const std::string &mode)
     {
       if (mode == "dev")
@@ -500,6 +769,12 @@ namespace vix::utils
       return mode;
     }
 
+    /**
+     * @brief Human-friendly status label shown in the banner.
+     *
+     * @param status Status string.
+     * @return Pretty status text.
+     */
     static std::string pretty_status(const std::string &status)
     {
       if (status.empty())
@@ -507,6 +782,13 @@ namespace vix::utils
       return status;
     }
 
+    /**
+     * @brief Build a small mode tag like "[run]" or "[dev]".
+     *
+     * @param mode Mode string.
+     * @param color Whether color output is enabled.
+     * @return Styled tag string.
+     */
     static std::string mode_tag_small(const std::string &mode, bool color)
     {
       const std::string m = mode.empty() ? "run" : mode;
@@ -515,7 +797,22 @@ namespace vix::utils
       return cyan("[" + m + "]", true);
     }
 
+    /**
+     * @brief Apply bright-white styling.
+     *
+     * @param s Input string.
+     * @param on Whether enabled.
+     * @return Styled or raw string.
+     */
     static std::string white_bright(const std::string &s, bool on) { return wrap("\033[97m", s, on); }
+
+    /**
+     * @brief Reset the terminal style before printing a fragment.
+     *
+     * @param s Fragment.
+     * @param on Whether enabled.
+     * @return Styled or raw fragment.
+     */
     static std::string reset_style(const std::string &s, bool on)
     {
       if (!on)
@@ -523,6 +820,14 @@ namespace vix::utils
       return std::string("\033[0m") + s;
     }
 
+    /**
+     * @brief Wrap a string with an ANSI code and reset.
+     *
+     * @param code ANSI prefix code.
+     * @param s Input string.
+     * @param on Whether enabled.
+     * @return Styled or raw string.
+     */
     static std::string wrap(const char *code, const std::string &s, bool on)
     {
       if (!on)
@@ -530,17 +835,42 @@ namespace vix::utils
       return std::string(code) + s + "\033[0m";
     }
 
+    /**
+     * @brief Apply gray styling.
+     */
     static std::string gray(const std::string &s, bool on) { return wrap("\033[90m", s, on); }
+
+    /**
+     * @brief Apply green styling.
+     */
     static std::string green(const std::string &s, bool on) { return wrap("\033[32m", s, on); }
+
+    /**
+     * @brief Apply cyan styling.
+     */
     static std::string cyan(const std::string &s, bool on) { return wrap("\033[36m", s, on); }
+
+    /**
+     * @brief Apply dim styling.
+     */
     static std::string dim(const std::string &s, bool on) { return wrap("\033[2m", s, on); }
+
+    /**
+     * @brief Apply bold styling.
+     */
     static std::string bold(const std::string &s, bool on) { return wrap("\033[1m", s, on); }
 
+    /**
+     * @brief A small green dot used as an OK indicator.
+     */
     static std::string ok_dot(bool color)
     {
       return color ? green("●", true) : "●";
     }
 
+    /**
+     * @brief Render a bracket badge such as "[text]".
+     */
     static std::string badge(const std::string &text, bool color)
     {
       if (!color)
@@ -548,17 +878,32 @@ namespace vix::utils
       return bold(gray("[" + text + "]", true), true);
     }
 
+    /**
+     * @brief Render the bullet icon used for main rows.
+     */
     static std::string bullet(bool color)
     {
       return color ? cyan("›", true) : std::string(">");
     }
 
+    /**
+     * @brief Render the small info mark used for secondary rows.
+     */
     static std::string info_mark(bool color)
     {
-      // Tiny info mark
       return color ? gray("i", true) : "i";
     }
 
+    /**
+     * @brief Render a URL as a clickable terminal link when supported.
+     *
+     * If OSC 8 hyperlinks are supported, the URL is wrapped as a link, while
+     * the visible label remains the (optionally colored) URL text.
+     *
+     * @param url URL to display.
+     * @param color Whether color output is enabled.
+     * @return Styled URL string.
+     */
     static std::string link(const std::string &url, bool color)
     {
       const bool hl = hyperlinks_enabled();
@@ -569,4 +914,4 @@ namespace vix::utils
 
 } // namespace vix::utils
 
-#endif
+#endif // VIX_SERVER_PRETTY_LOGS_HPP

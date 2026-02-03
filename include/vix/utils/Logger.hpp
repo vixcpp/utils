@@ -3,8 +3,10 @@
  *  @file Logger.hpp
  *  @author Gaspard Kirira
  *
- *  Copyright 2025, Gaspard Kirira.  All rights reserved.
+ *  Copyright 2025, Gaspard Kirira.
+ *  All rights reserved.
  *  https://github.com/vixcpp/vix
+ *
  *  Use of this source code is governed by a MIT license
  *  that can be found in the License file.
  *
@@ -17,12 +19,12 @@
 /**
  * @brief Thin, opinionated wrapper around spdlog with per-thread context and KV logging.
  *
- * - Default output: **console only** (no log file is created).
- * - Default level: **INFO** (override with `VIX_LOG_LEVEL=trace|debug|info|warn|error|critical`).
- * - Default pattern (runtime-like): `HH:MM:SS [level] message`
+ * - Default output: console only (no log file is created).
+ * - Default level: INFO (override with VIX_LOG_LEVEL=trace|debug|info|warn|error|critical).
+ * - Default pattern (runtime-like): HH:MM:SS [level] message
  *
  * Typical usage
- * ```cpp
+ * @code{.cpp}
  * auto &log = vix::utils::Logger::getInstance();
  *
  * // Optional: set explicit level (otherwise uses VIX_LOG_LEVEL or defaults to INFO)
@@ -46,24 +48,24 @@
  * log.logf(vix::utils::Logger::Level::INFO, "Login ok",
  *          "user", user.c_str(),
  *          "latency_ms", 12);
- * ```
+ * @endcode
  */
 
-#include <string>
+#include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <map>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <stdexcept>
-#include <iostream>
-#include <type_traits>
-#include <string_view>
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/fmt/ostr.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 #include <vix/utils/ConsoleMutex.hpp>
 
@@ -75,14 +77,37 @@
 
 namespace vix::utils
 {
+  /**
+   * @brief Central logging facility for Vix.
+   *
+   * Logger wraps spdlog and adds:
+   * - singleton lifetime management
+   * - runtime configuration via env vars
+   * - per-thread context (request id, module, custom fields)
+   * - key/value logging in KV or JSON (single line or pretty)
+   * - optional console synchronization (to avoid interleaving with banners)
+   *
+   * The logger is designed to be safe in multi-threaded applications and
+   * to keep output deterministic and easy to parse.
+   */
   class Logger
   {
   public:
+    /**
+     * @brief Delete copy operations.
+     */
     Logger(const Logger &) = delete;
     Logger &operator=(const Logger &) = delete;
+
+    /**
+     * @brief Delete move operations.
+     */
     Logger(Logger &&) = delete;
     Logger &operator=(Logger &&) = delete;
 
+    /**
+     * @brief Logging severity level.
+     */
     enum class Level
     {
       TRACE,
@@ -94,19 +119,43 @@ namespace vix::utils
       OFF
     };
 
+    /**
+     * @brief Output format for structured logging.
+     */
     enum class Format
     {
+      /**
+       * @brief Key-value pairs appended to the message (text).
+       */
       KV,
+
+      /**
+       * @brief JSON formatted as a single line.
+       */
       JSON,
+
+      /**
+       * @brief Pretty JSON with indentation (optionally colored).
+       */
       JSON_PRETTY
     };
 
+    /**
+     * @brief Get the global Logger instance.
+     *
+     * @return Singleton logger instance.
+     */
     static Logger &getInstance()
     {
       static Logger instance;
       return instance;
     }
 
+    /**
+     * @brief Set the active logging level.
+     *
+     * @param level New logging level.
+     */
     void setLevel(Level level)
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -114,46 +163,91 @@ namespace vix::utils
         spd_->set_level(toSpdLevel(level));
     }
 
+    /**
+     * @brief Set the structured output format.
+     *
+     * @param f Desired output format.
+     */
     void setFormat(Format f);
+
+    /**
+     * @brief Read the structured output format from an environment variable.
+     *
+     * @param envName Name of the environment variable (default: VIX_LOG_FORMAT).
+     */
     void setFormatFromEnv(std::string_view envName = "VIX_LOG_FORMAT");
+
+    /**
+     * @brief Parse a format string into Format.
+     *
+     * @param s Format name (kv|json|json_pretty).
+     * @return Parsed format.
+     */
     static Format parseFormat(std::string_view s);
 
+    /**
+     * @brief Log a TRACE message.
+     */
     template <typename... Args>
     void trace(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       log(Level::TRACE, fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log a DEBUG message.
+     */
     template <typename... Args>
     void debug(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       log(Level::DEBUG, fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log an INFO message.
+     */
     template <typename... Args>
     void info(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       log(Level::INFO, fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log a WARN message.
+     */
     template <typename... Args>
     void warn(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       log(Level::WARN, fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log an ERROR message.
+     */
     template <typename... Args>
     void error(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       log(Level::ERROR, fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log a CRITICAL message.
+     */
     template <typename... Args>
     void critical(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       log(Level::CRITICAL, fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log a formatted message at the given level.
+     *
+     * This function checks the logger level and only formats/logs if enabled.
+     *
+     * @param level Log level.
+     * @param fmtstr Format string.
+     * @param args Format arguments.
+     */
     template <typename... Args>
     void log(Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
     {
@@ -181,6 +275,16 @@ namespace vix::utils
       spd->log(toSpdLevel(level), fmtstr, std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Log a formatted message with an explicit module prefix.
+     *
+     * The module prefix is prepended as: [module] message
+     *
+     * @param module Module name.
+     * @param level Log level.
+     * @param fmtstr Format string.
+     * @param args Format arguments.
+     */
     template <typename... Args>
     void logModule(std::string_view module,
                    Level level,
@@ -215,6 +319,9 @@ namespace vix::utils
       spd->log(toSpdLevel(level), "{}", fmt::to_string(buf));
     }
 
+    /**
+     * @brief Format, log as ERROR, then throw std::runtime_error.
+     */
     template <typename... Args>
     [[noreturn]] void throwError(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
@@ -223,28 +330,83 @@ namespace vix::utils
       throw std::runtime_error(msg);
     }
 
+    /**
+     * @brief Log as ERROR, then throw std::runtime_error.
+     */
     [[noreturn]] void throwError(const std::string &msg)
     {
       log(Level::ERROR, "{}", msg);
       throw std::runtime_error(msg);
     }
 
+    /**
+     * @brief Per-thread logging context.
+     *
+     * Stored in thread-local storage and appended to KV/JSON logs.
+     */
     struct Context
     {
+      /**
+       * @brief Request identifier for correlation.
+       */
       std::string request_id;
+
+      /**
+       * @brief Logical module name.
+       */
       std::string module;
+
+      /**
+       * @brief Arbitrary fields appended to logs (e.g. ip, user_id).
+       */
       std::unordered_map<std::string, std::string> fields;
 
       Context() : request_id(), module(), fields() {}
     };
 
+    /**
+     * @brief Set the spdlog pattern for console output.
+     *
+     * @param pattern spdlog pattern string.
+     */
     void setPattern(const std::string &pattern);
+
+    /**
+     * @brief Enable or disable async logging mode.
+     *
+     * @param enable True to enable async mode.
+     */
     void setAsync(bool enable);
 
+    /**
+     * @brief Replace the current thread context.
+     *
+     * @param ctx New context.
+     */
     void setContext(Context ctx);
+
+    /**
+     * @brief Clear the current thread context.
+     */
     void clearContext();
+
+    /**
+     * @brief Get a copy of the current thread context.
+     */
     Context getContext() const;
 
+    /**
+     * @brief Log a message with key/value pairs.
+     *
+     * The kvpairs arguments are expected as alternating key/value pairs:
+     *   logf(INFO, "msg", "k1", v1, "k2", v2, ...).
+     *
+     * Depending on the configured format, output is KV, JSON, or pretty JSON.
+     *
+     * @param level Log level.
+     * @param msg Base message.
+     * @param kvpairs Key/value pairs.
+     */
     template <typename... Args>
     void logf(Level level, const std::string &msg, Args &&...kvpairs)
     {
@@ -259,6 +421,7 @@ namespace vix::utils
       {
         vix::utils::console_wait_banner();
         std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
+        (void)lk;
       }
 
       if (format_ == Format::JSON_PRETTY)
@@ -286,11 +449,36 @@ namespace vix::utils
       spd_->log(toSpdLevel(level), "{}", line);
     }
 
+    /**
+     * @brief Set the logging level from an environment variable.
+     *
+     * @param envName Name of the environment variable (default: VIX_LOG_LEVEL).
+     */
     void setLevelFromEnv(std::string_view envName = "VIX_LOG_LEVEL");
+
+    /**
+     * @brief Parse a level string into Level.
+     */
     static Level parseLevel(std::string_view s);
-    static Level parseLevelFromEnv(std::string_view envName = "VIX_LOG_LEVEL", Level fallback = Level::WARN);
+
+    /**
+     * @brief Parse a level from an environment variable.
+     *
+     * @param envName Environment variable name.
+     * @param fallback Fallback level if not set or invalid.
+     */
+    static Level parseLevelFromEnv(
+        std::string_view envName = "VIX_LOG_LEVEL",
+        Level fallback = Level::WARN);
+
+    /**
+     * @brief Whether pretty JSON output should include ANSI colors.
+     */
     static bool jsonColorsEnabled();
 
+    /**
+     * @brief Return the current spdlog level mapped to Logger::Level.
+     */
     Level level() const noexcept
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -313,6 +501,9 @@ namespace vix::utils
       return Level::OFF;
     }
 
+    /**
+     * @brief Check whether the given level is enabled.
+     */
     bool enabled(Level lvl) const noexcept
     {
       std::lock_guard<std::mutex> lock(mutex_);
@@ -322,8 +513,14 @@ namespace vix::utils
     }
 
   private:
+    /**
+     * @brief Private constructor (singleton).
+     */
     Logger();
 
+    /**
+     * @brief Convert Logger::Level to spdlog level.
+     */
     static spdlog::level::level_enum toSpdLevel(Level level) noexcept
     {
       switch (level)
@@ -351,10 +548,21 @@ namespace vix::utils
     mutable std::mutex mutex_;
     Format format_ = Format::KV;
 
+    /**
+     * @brief Thread-local context for the current thread.
+     */
     static thread_local Context tls_ctx_;
+
+    /**
+     * @brief Access the thread-local context.
+     */
     const Context &ctx() const noexcept { return tls_ctx_; }
 
+    /**
+     * @brief Append key/value pairs to a string in KV form.
+     */
     static void appendKV(std::string &) {}
+
     template <typename V, typename... Rest>
     static void appendKV(std::string &s, const char *k, V &&v, Rest &&...rest)
     {
@@ -366,6 +574,9 @@ namespace vix::utils
         appendKV(s, std::forward<Rest>(rest)...);
     }
 
+    /**
+     * @brief Append a string to JSON with proper escaping.
+     */
     static void appendJsonEscaped(std::string &out, std::string_view s)
     {
       for (const char ch : s)
@@ -411,6 +622,9 @@ namespace vix::utils
       }
     }
 
+    /**
+     * @brief Append a JSON key (with quotes and escaping) and a colon.
+     */
     static void appendJsonKey(std::string &out, std::string_view key)
     {
       out += "\"";
@@ -418,6 +632,9 @@ namespace vix::utils
       out += "\":";
     }
 
+    /**
+     * @brief Append a JSON string value (with quotes and escaping).
+     */
     static void appendJsonStringValue(std::string &out, std::string_view value)
     {
       out += "\"";
@@ -425,6 +642,12 @@ namespace vix::utils
       out += "\"";
     }
 
+    /**
+     * @brief Append a JSON value of various supported types.
+     *
+     * Numbers and booleans are emitted as JSON primitives. Other values
+     * are formatted as strings.
+     */
     template <typename V>
     static void appendJsonValue(std::string &out, V &&v)
     {
@@ -454,6 +677,9 @@ namespace vix::utils
       }
     }
 
+    /**
+     * @brief Convert Level to a lowercase string (for JSON output).
+     */
     static std::string levelToString(Level level)
     {
       switch (level)
@@ -477,6 +703,9 @@ namespace vix::utils
       }
     }
 
+    /**
+     * @brief Build a single-line JSON log entry.
+     */
     template <typename... Args>
     std::string buildJsonLine(Level level, std::string_view msg, Args &&...kvpairs) const
     {
@@ -517,6 +746,9 @@ namespace vix::utils
       return out;
     }
 
+    /**
+     * @brief Append a value to pretty JSON output.
+     */
     template <typename V>
     static void appendJsonPrettyValue(std::string &out, V &&v, bool color)
     {
@@ -576,10 +808,16 @@ namespace vix::utils
       }
     }
 
+    /**
+     * @brief Helpers for ANSI colored output (used by pretty JSON).
+     */
     static std::string c_red(std::string_view s, bool on) { return ansi_wrap("\033[31m", s, on); }
     static std::string c_blue(std::string_view s, bool on) { return ansi_wrap("\033[34m", s, on); }
     static std::string c_dim(std::string_view s, bool on) { return ansi_wrap("\033[2m", s, on); }
 
+    /**
+     * @brief Colorize HTTP status codes in pretty JSON.
+     */
     template <typename Int>
     static std::string c_http_status(Int code, bool on)
     {
@@ -590,28 +828,27 @@ namespace vix::utils
         return s;
 
       if (c >= 200 && c < 300)
-        return ansi_wrap("\033[32m", s, true); // green
+        return ansi_wrap("\033[32m", s, true);
       if (c >= 300 && c < 400)
-        return ansi_wrap("\033[36m", s, true); // cyan
+        return ansi_wrap("\033[36m", s, true);
       if (c >= 400 && c < 500)
-        return ansi_wrap("\033[33m", s, true); // yellow
+        return ansi_wrap("\033[33m", s, true);
       if (c >= 500 && c < 600)
-        return ansi_wrap("\033[31m", s, true); // red
-      return ansi_wrap("\033[90m", s, true);   // gray
+        return ansi_wrap("\033[31m", s, true);
+      return ansi_wrap("\033[90m", s, true);
     }
 
+    /**
+     * @brief Check if a string ends with a suffix.
+     */
     static bool ends_with(std::string_view s, std::string_view suf)
     {
       return s.size() >= suf.size() && s.substr(s.size() - suf.size()) == suf;
     }
 
-    template <typename V>
-    static bool is_integralish_v()
-    {
-      using T = std::remove_cv_t<std::remove_reference_t<V>>;
-      return std::is_integral_v<T> && !std::is_same_v<T, bool>;
-    }
-
+    /**
+     * @brief Append pretty JSON key/value pairs.
+     */
     static void appendJsonPrettyKV(std::string &, bool) {}
 
     template <typename V, typename... Rest>
@@ -700,6 +937,9 @@ namespace vix::utils
         appendJsonPrettyKV(out, color, std::forward<Rest>(rest)...);
     }
 
+    /**
+     * @brief Build a pretty JSON log entry.
+     */
     template <typename... Args>
     std::string buildJsonPretty(Level level, std::string_view msg, Args &&...kvpairs) const
     {
@@ -766,6 +1006,9 @@ namespace vix::utils
       return out;
     }
 
+    /**
+     * @brief Append JSON key/value pairs (single-line JSON).
+     */
     template <typename V, typename... Rest>
     static void appendJsonKV(std::string &out, const char *k, V &&v, Rest &&...rest)
     {
@@ -777,6 +1020,9 @@ namespace vix::utils
         appendJsonKV(out, std::forward<Rest>(rest)...);
     }
 
+    /**
+     * @brief Wrap a string with an ANSI color code when enabled.
+     */
     static std::string ansi_wrap(std::string_view code, std::string_view s, bool on)
     {
       if (!on)
@@ -790,12 +1036,19 @@ namespace vix::utils
       return out;
     }
 
-    static std::string c_key(std::string_view s, bool on) { return ansi_wrap("\033[36m", s, on); }  // cyan
-    static std::string c_str(std::string_view s, bool on) { return ansi_wrap("\033[32m", s, on); }  // green
-    static std::string c_num(std::string_view s, bool on) { return ansi_wrap("\033[33m", s, on); }  // yellow
-    static std::string c_bool(std::string_view s, bool on) { return ansi_wrap("\033[35m", s, on); } // magenta
-    static std::string c_punc(std::string_view s, bool on) { return ansi_wrap("\033[90m", s, on); } // gray
+    static std::string c_key(std::string_view s, bool on) { return ansi_wrap("\033[36m", s, on); }
+    static std::string c_str(std::string_view s, bool on) { return ansi_wrap("\033[32m", s, on); }
+    static std::string c_num(std::string_view s, bool on) { return ansi_wrap("\033[33m", s, on); }
+    static std::string c_bool(std::string_view s, bool on) { return ansi_wrap("\033[35m", s, on); }
+    static std::string c_punc(std::string_view s, bool on) { return ansi_wrap("\033[90m", s, on); }
 
+    /**
+     * @brief Whether console synchronization is enabled.
+     *
+     * Controlled by VIX_CONSOLE_SYNC:
+     * - unset or 0/false: disabled
+     * - otherwise: enabled
+     */
     static bool console_sync_enabled()
     {
       if (const char *v = std::getenv("VIX_CONSOLE_SYNC"); v && *v)
@@ -803,6 +1056,7 @@ namespace vix::utils
       return false;
     }
   };
-}
 
-#endif // VIX_LOGGER_HPP
+} // namespace vix::utils
+
+#endif // VIX_UTILS_LOGGER_HPP
