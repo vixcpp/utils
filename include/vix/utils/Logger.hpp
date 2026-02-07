@@ -61,6 +61,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <cstdlib>
 
 #include <spdlog/fmt/ostr.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -73,6 +74,22 @@
 #include <fmt/format.h>
 #else
 #include <spdlog/fmt/bundled/format.h>
+#endif
+
+#if defined(_WIN32)
+// Windows headers sometimes define macros like ERROR/DEBUG.
+// They break enum values named ERROR/DEBUG.
+#if defined(ERROR)
+#pragma push_macro("ERROR")
+#undef ERROR
+#define VIX_UTILS_RESTORE_ERROR_MACRO 1
+#endif
+
+#if defined(DEBUG)
+#pragma push_macro("DEBUG")
+#undef DEBUG
+#define VIX_UTILS_RESTORE_DEBUG_MACRO 1
+#endif
 #endif
 
 namespace vix::utils
@@ -1058,5 +1075,17 @@ namespace vix::utils
   };
 
 } // namespace vix::utils
+
+#if defined(_WIN32)
+#if defined(VIX_UTILS_RESTORE_DEBUG_MACRO)
+#pragma pop_macro("DEBUG")
+#undef VIX_UTILS_RESTORE_DEBUG_MACRO
+#endif
+
+#if defined(VIX_UTILS_RESTORE_ERROR_MACRO)
+#pragma pop_macro("ERROR")
+#undef VIX_UTILS_RESTORE_ERROR_MACRO
+#endif
+#endif
 
 #endif // VIX_UTILS_LOGGER_HPP
