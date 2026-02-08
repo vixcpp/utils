@@ -12,14 +12,6 @@
  *
  */
 #include <vix/utils/Logger.hpp>
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX 1
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN 1
-#endif
-#endif
 
 #include <spdlog/async.h>
 #include <spdlog/async_logger.h>
@@ -32,23 +24,6 @@
 #include <string_view>
 #ifndef _WIN32
 #include <unistd.h>
-#endif
-
-#if defined(_WIN32)
-#include <stdlib.h>
-#endif
-
-#if defined(_WIN32)
-#if defined(ERROR)
-#pragma push_macro("ERROR")
-#undef ERROR
-#define VIX_UTILS_RESTORE_ERROR_MACRO_CPP 1
-#endif
-#if defined(DEBUG)
-#pragma push_macro("DEBUG")
-#undef DEBUG
-#define VIX_UTILS_RESTORE_DEBUG_MACRO_CPP 1
-#endif
 #endif
 
 namespace vix::utils
@@ -95,7 +70,7 @@ namespace vix::utils
   Logger::Level Logger::parseLevelFromEnv(std::string_view envName, Level fallback)
   {
     const std::string key(envName);
-    const char *raw = vix::utils::env(key.c_str());
+    const char *raw = std::getenv(key.c_str());
     if (!raw || !*raw)
       return fallback;
     return parseLevel(raw);
@@ -104,15 +79,6 @@ namespace vix::utils
   void Logger::setLevelFromEnv(std::string_view envName)
   {
     setLevel(parseLevelFromEnv(envName, Level::INFO));
-  }
-
-  void Logger::setFormatFromEnv(std::string_view envName)
-  {
-    const std::string key(envName);
-    const char *raw = vix::utils::env(key.c_str());
-    if (!raw || !*raw)
-      return;
-    setFormat(parseFormat(raw));
   }
 
   Logger::Logger() : spd_(nullptr), mutex_()
@@ -254,12 +220,21 @@ namespace vix::utils
     spd_->flush_on(spdlog::level::warn);
   }
 
+  void Logger::setFormatFromEnv(std::string_view envName)
+  {
+    const std::string key(envName);
+    const char *raw = std::getenv(key.c_str());
+    if (!raw || !*raw)
+      return;
+    setFormat(parseFormat(raw));
+  }
+
   bool Logger::jsonColorsEnabled()
   {
-    if (const char *nc = vix::utils::env("NO_COLOR"); nc && *nc)
+    if (const char *nc = std::getenv("NO_COLOR"); nc && *nc)
       return false;
 
-    if (const char *c = vix::utils::env("VIX_COLOR"); c && *c)
+    if (const char *c = std::getenv("VIX_COLOR"); c && *c)
     {
       const std::string v = lower_copy(c);
 
@@ -278,14 +253,3 @@ namespace vix::utils
   }
 
 } // namespace vix::utils
-
-#if defined(_WIN32)
-#if defined(VIX_UTILS_RESTORE_DEBUG_MACRO_CPP)
-#pragma pop_macro("DEBUG")
-#undef VIX_UTILS_RESTORE_DEBUG_MACRO_CPP
-#endif
-#if defined(VIX_UTILS_RESTORE_ERROR_MACRO_CPP)
-#pragma pop_macro("ERROR")
-#undef VIX_UTILS_RESTORE_ERROR_MACRO_CPP
-#endif
-#endif
