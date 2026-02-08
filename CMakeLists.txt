@@ -95,22 +95,13 @@ else()
   )
 endif()
 
-# -------------------------
-# Dependencies: spdlog (prefer system/vcpkg, fallback FetchContent)
-# -------------------------
+# Dependencies (robust): spdlog (prefer header-only, fallback to compiled)
 include(FetchContent)
 
 find_package(spdlog CONFIG QUIET)
+find_package(fmt CONFIG QUIET) # may be needed when spdlog uses external fmt
 
-set(_VIX_SPDLOG_TARGET "")
-
-if (TARGET spdlog::spdlog_header_only)
-  set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
-elseif (TARGET spdlog::spdlog)
-  set(_VIX_SPDLOG_TARGET spdlog::spdlog)
-endif()
-
-if (_VIX_SPDLOG_TARGET STREQUAL "")
+if (NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
   message(STATUS "[utils] spdlog not found -> fetching spdlog")
 
   FetchContent_Declare(
@@ -119,24 +110,38 @@ if (_VIX_SPDLOG_TARGET STREQUAL "")
     GIT_TAG        v1.14.1
   )
 
-  set(SPDLOG_BUILD_SHARED  OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_BENCH   OFF CACHE BOOL "" FORCE)
   set(SPDLOG_FMT_EXTERNAL  OFF CACHE BOOL "" FORCE)
 
   FetchContent_MakeAvailable(spdlog)
-
-  if (TARGET spdlog::spdlog_header_only)
-    set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
-  elseif (TARGET spdlog::spdlog)
-    set(_VIX_SPDLOG_TARGET spdlog::spdlog)
-  else()
-    message(FATAL_ERROR "[utils] spdlog target missing after FetchContent.")
-  endif()
 endif()
 
-target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} ${_VIX_SPDLOG_TARGET})
+set(_VIX_UTILS_SCOPE PUBLIC)
+if(VIX_HEADER_ONLY)
+  set(_VIX_UTILS_SCOPE INTERFACE)
+endif()
+
+# Prefer header-only target when available
+if (TARGET spdlog::spdlog_header_only)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog_header_only)
+
+# Fallback to compiled spdlog
+elseif (TARGET spdlog::spdlog)
+  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog)
+
+  # If spdlog is built with external fmt, we must link fmt too
+  if (TARGET fmt::fmt)
+    target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt)
+  elseif (TARGET fmt::fmt-header-only)
+    target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt-header-only)
+  endif()
+
+else()
+  message(FATAL_ERROR "[utils] spdlog target not found after fallback.")
+endif()
 
 # Compiler warnings
 if (TARGET vix_warnings)
