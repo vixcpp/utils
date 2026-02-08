@@ -95,13 +95,17 @@ else()
   )
 endif()
 
-# Dependencies (robust): spdlog header-only (fallback FetchContent)
+# -------------------------
+# Dependencies: spdlog (+ fmt when external)
+# -------------------------
 include(FetchContent)
 
 find_package(spdlog CONFIG QUIET)
+find_package(fmt CONFIG QUIET)
 
-if (NOT TARGET spdlog::spdlog_header_only)
-  message(STATUS "[utils] spdlog::spdlog_header_only not found -> fetching spdlog (header-only)")
+# If spdlog is missing, fetch it (bundled fmt)
+if (NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
+  message(STATUS "[utils] spdlog not found -> fetching spdlog (bundled fmt)")
 
   FetchContent_Declare(
     spdlog
@@ -109,7 +113,7 @@ if (NOT TARGET spdlog::spdlog_header_only)
     GIT_TAG        v1.14.1
   )
 
-  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_SHARED  OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_BENCH   OFF CACHE BOOL "" FORCE)
@@ -119,17 +123,59 @@ if (NOT TARGET spdlog::spdlog_header_only)
 endif()
 
 set(_VIX_UTILS_SCOPE PUBLIC)
-if(VIX_HEADER_ONLY)
+if (VIX_HEADER_ONLY)
   set(_VIX_UTILS_SCOPE INTERFACE)
 endif()
 
-if (TARGET spdlog::spdlog_header_only)
-  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog_header_only)
-  target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE} SPDLOG_HEADER_ONLY=1)
+# Choose best spdlog target
+set(_VIX_SPDLOG_TARGET "")
+if (TARGET spdlog::spdlog)
+  set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+elseif (TARGET spdlog::spdlog_header_only)
+  set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
 else()
-  message(FATAL_ERROR "spdlog::spdlog_header_only still missing after fallback.")
+  message(FATAL_ERROR "[utils] spdlog target not found after fallback.")
 endif()
 
+target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} ${_VIX_SPDLOG_TARGET})
+
+# Detect if spdlog requires external fmt (SPDLOG_FMT_EXTERNAL)
+set(_VIX_SPDLOG_NEEDS_FMT OFF)
+
+get_target_property(_spd_defs_iface ${_VIX_SPDLOG_TARGET} INTERFACE_COMPILE_DEFINITIONS)
+if (_spd_defs_iface)
+  foreach(d IN LISTS _spd_defs_iface)
+    if (d STREQUAL "SPDLOG_FMT_EXTERNAL" OR d MATCHES "^SPDLOG_FMT_EXTERNAL=")
+      set(_VIX_SPDLOG_NEEDS_FMT ON)
+    endif()
+  endforeach()
+endif()
+
+get_target_property(_spd_defs ${_VIX_SPDLOG_TARGET} COMPILE_DEFINITIONS)
+if (_spd_defs)
+  foreach(d IN LISTS _spd_defs)
+    if (d STREQUAL "SPDLOG_FMT_EXTERNAL" OR d MATCHES "^SPDLOG_FMT_EXTERNAL=")
+      set(_VIX_SPDLOG_NEEDS_FMT ON)
+    endif()
+  endforeach()
+endif()
+
+if (_VIX_SPDLOG_NEEDS_FMT)
+  if (TARGET fmt::fmt)
+    target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt)
+  elseif (TARGET fmt::fmt-header-only)
+    target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt-header-only)
+  else()
+    message(FATAL_ERROR "[utils] spdlog requires external fmt (SPDLOG_FMT_EXTERNAL) but fmt package was not found.")
+  endif()
+endif()
+
+# -------------------------
+# Windows: prevent Win32 API usage by spdlog
+# -------------------------
+if (WIN32)
+  target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE} SPDLOG_NO_WIN32_API=1)
+endif()
 
 # Compiler warnings
 if (TARGET vix_warnings)

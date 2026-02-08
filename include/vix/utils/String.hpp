@@ -44,9 +44,9 @@ namespace vix::utils
    */
   inline constexpr bool _is_space(unsigned char c) noexcept
   {
-    return std::isspace(c) != 0; // C-locale; sufficient for generic trimming
+    // ASCII whitespace: space + \t \n \v \f \r
+    return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
   }
-
   /**
    * @brief Left-trim leading whitespace (C locale).
    *
