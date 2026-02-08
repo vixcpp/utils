@@ -95,13 +95,23 @@ else()
   )
 endif()
 
-# Dependencies (robust): spdlog header-only (fallback FetchContent)
+# -------------------------
+# Dependencies: spdlog (prefer system/vcpkg, fallback FetchContent)
+# -------------------------
 include(FetchContent)
 
 find_package(spdlog CONFIG QUIET)
 
-if (NOT TARGET spdlog::spdlog_header_only)
-  message(STATUS "[utils] spdlog::spdlog_header_only not found -> fetching spdlog (header-only)")
+set(_VIX_SPDLOG_TARGET "")
+
+if (TARGET spdlog::spdlog_header_only)
+  set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+elseif (TARGET spdlog::spdlog)
+  set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+endif()
+
+if (_VIX_SPDLOG_TARGET STREQUAL "")
+  message(STATUS "[utils] spdlog not found -> fetching spdlog")
 
   FetchContent_Declare(
     spdlog
@@ -109,27 +119,24 @@ if (NOT TARGET spdlog::spdlog_header_only)
     GIT_TAG        v1.14.1
   )
 
-  set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_SHARED  OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_BENCH   OFF CACHE BOOL "" FORCE)
   set(SPDLOG_FMT_EXTERNAL  OFF CACHE BOOL "" FORCE)
 
   FetchContent_MakeAvailable(spdlog)
+
+  if (TARGET spdlog::spdlog_header_only)
+    set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+  elseif (TARGET spdlog::spdlog)
+    set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+  else()
+    message(FATAL_ERROR "[utils] spdlog target missing after FetchContent.")
+  endif()
 endif()
 
-set(_VIX_UTILS_SCOPE PUBLIC)
-if(VIX_HEADER_ONLY)
-  set(_VIX_UTILS_SCOPE INTERFACE)
-endif()
-
-if (TARGET spdlog::spdlog_header_only)
-  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog_header_only)
-  target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE} SPDLOG_HEADER_ONLY=1)
-else()
-  message(FATAL_ERROR "spdlog::spdlog_header_only still missing after fallback.")
-endif()
-
+target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} ${_VIX_SPDLOG_TARGET})
 
 # Compiler warnings
 if (TARGET vix_warnings)
