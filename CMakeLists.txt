@@ -125,7 +125,6 @@ endif()
 
 if (TARGET spdlog::spdlog_header_only)
   target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} spdlog::spdlog_header_only)
-  target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE} SPDLOG_HEADER_ONLY=1)
 else()
   message(FATAL_ERROR "spdlog::spdlog_header_only still missing after fallback.")
 endif()

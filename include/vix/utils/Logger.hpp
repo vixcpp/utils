@@ -94,6 +94,31 @@
 
 namespace vix::utils
 {
+  inline const char *env(const char *name) noexcept
+  {
+#if defined(_WIN32)
+    static thread_local std::string value;
+    value.clear();
+
+    char *buf = nullptr;
+    size_t len = 0;
+
+    if (_dupenv_s(&buf, &len, name) == 0 && buf)
+    {
+      value.assign(buf);
+      free(buf);
+      return value.c_str();
+    }
+
+    if (buf)
+      free(buf);
+
+    return nullptr;
+#else
+    return std::getenv(name);
+#endif
+  }
+
   /**
    * @brief Central logging facility for Vix.
    *
@@ -1068,7 +1093,7 @@ namespace vix::utils
      */
     static bool console_sync_enabled()
     {
-      if (const char *v = std::getenv("VIX_CONSOLE_SYNC"); v && *v)
+      if (const char *v = vix::utils::env("VIX_CONSOLE_SYNC"); v && *v)
         return std::string_view(v) != "0" && std::string_view(v) != "false";
       return false;
     }
