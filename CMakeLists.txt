@@ -143,6 +143,15 @@ else()
   message(FATAL_ERROR "[utils] spdlog target not found after fallback.")
 endif()
 
+# -------------------------
+# Windows: prevent Win32 macro pollution from spdlog
+# -------------------------
+if (WIN32)
+  target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE}
+    SPDLOG_NO_WIN32_API=1
+  )
+endif()
+
 # Compiler warnings
 if (TARGET vix_warnings)
   target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_warnings)
