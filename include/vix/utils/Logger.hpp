@@ -51,31 +51,6 @@
  * @endcode
  */
 
-#include <iostream>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <unordered_map>
-#include <utility>
-#include <cstdlib>
-
-#include <spdlog/fmt/ostr.h>
-#include <spdlog/sinks/rotating_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
-
-#include <vix/utils/ConsoleMutex.hpp>
-
-#if defined(SPDLOG_FMT_EXTERNAL)
-#include <fmt/format.h>
-#else
-#include <spdlog/fmt/bundled/format.h>
-#endif
-
 #if defined(_WIN32)
 // Windows headers sometimes define macros like ERROR/DEBUG/min/max.
 // They break enum values or common identifiers.
@@ -104,6 +79,31 @@
 #define VIX_UTILS_RESTORE_MAX_MACRO 1
 #endif
 
+#endif
+
+#include <iostream>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <cstdlib>
+
+#include <spdlog/fmt/ostr.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
+
+#include <vix/utils/ConsoleMutex.hpp>
+
+#if defined(SPDLOG_FMT_EXTERNAL)
+#include <fmt/format.h>
+#else
+#include <spdlog/fmt/bundled/format.h>
 #endif
 
 namespace vix::utils
