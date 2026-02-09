@@ -26,6 +26,7 @@
 #include <string>
 
 #include <vix/utils/ConsoleMutex.hpp>
+#include <vix/utils/Env.hpp>
 
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -179,10 +180,10 @@ namespace vix::utils
      */
     static bool colors_enabled()
     {
-      if (const char *no = std::getenv("NO_COLOR"); no && *no)
+      if (const char *no = vix_getenv("NO_COLOR"); no && *no)
         return false;
 
-      if (const char *v = std::getenv("VIX_COLOR"); v && *v)
+      if (const char *v = vix_getenv("VIX_COLOR"); v && *v)
       {
         std::string s(v);
         for (auto &c : s)
@@ -208,7 +209,7 @@ namespace vix::utils
      */
     static std::string mode_from_env()
     {
-      const char *v = std::getenv("VIX_MODE");
+      const char *v = vix_getenv("VIX_MODE");
       if (!v || !*v)
         return "run";
 
@@ -234,33 +235,33 @@ namespace vix::utils
      */
     static bool hyperlinks_enabled()
     {
-      if (const char *no = std::getenv("VIX_NO_HYPERLINK"); no && *no)
+      if (const char *no = vix_getenv("VIX_NO_HYPERLINK"); no && *no)
         return false;
 
       if (!stderr_is_tty())
         return false;
 
-      if (std::getenv("VSCODE_PID"))
+      if (vix_getenv("VSCODE_PID"))
         return true;
-      if (std::getenv("WT_SESSION"))
+      if (vix_getenv("WT_SESSION"))
         return true;
-      if (std::getenv("WEZTERM_EXECUTABLE"))
+      if (vix_getenv("WEZTERM_EXECUTABLE"))
         return true;
 
-      if (const char *tp = std::getenv("TERM_PROGRAM"))
+      if (const char *tp = vix_getenv("TERM_PROGRAM"))
       {
         std::string s(tp);
         if (s == "iTerm.app" || s == "Apple_Terminal" || s == "WezTerm" || s == "vscode")
           return true;
       }
 
-      if (std::getenv("KITTY_WINDOW_ID"))
+      if (vix_getenv("KITTY_WINDOW_ID"))
         return true;
 
-      if (std::getenv("VTE_VERSION"))
+      if (vix_getenv("VTE_VERSION"))
         return true;
 
-      if (const char *term = std::getenv("TERM"))
+      if (const char *term = vix_getenv("TERM"))
       {
         std::string t(term);
         if (t.find("screen") != std::string::npos)
@@ -426,13 +427,13 @@ namespace vix::utils
      */
     static bool animations_enabled()
     {
-      if (const char *no = std::getenv("VIX_NO_ANIM"); no && *no)
+      if (const char *no = vix_getenv("VIX_NO_ANIM"); no && *no)
         return false;
 
       if (!stderr_is_tty())
         return false;
 
-      if (const char *nc = std::getenv("NO_COLOR"); nc && *nc)
+      if (const char *nc = vix_getenv("NO_COLOR"); nc && *nc)
         return false;
 
       return true;

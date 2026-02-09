@@ -69,7 +69,7 @@ namespace vix::utils
   Logger::Level Logger::parseLevelFromEnv(std::string_view envName, Level fallback)
   {
     const std::string key(envName);
-    const char *raw = vix_getenv(key.c_str());
+    const char *raw = vix::utils::vix_getenv(key.c_str());
     if (!raw || !*raw)
       return fallback;
     return parseLevel(raw);
@@ -222,7 +222,7 @@ namespace vix::utils
   void Logger::setFormatFromEnv(std::string_view envName)
   {
     const std::string key(envName);
-    const char *raw = vix_getenv(key.c_str());
+    const char *raw = vix::utils::vix_getenv(key.c_str());
     if (!raw || !*raw)
       return;
     setFormat(parseFormat(raw));
@@ -230,10 +230,10 @@ namespace vix::utils
 
   bool Logger::jsonColorsEnabled()
   {
-    if (const char *nc = vix_getenv("NO_COLOR"); nc && *nc)
+    if (const char *nc = vix::utils::vix_getenv("NO_COLOR"); nc && *nc)
       return false;
 
-    if (const char *c = vix_getenv("VIX_COLOR"); c && *c)
+    if (const char *c = vix::utils::vix_getenv("VIX_COLOR"); c && *c)
     {
       const std::string v = lower_copy(c);
 

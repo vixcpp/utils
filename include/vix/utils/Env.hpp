@@ -80,7 +80,42 @@ namespace vix::utils
       }
       return true;
     }
+
+    inline std::string_view trim(std::string_view s) noexcept
+    {
+      std::size_t b = 0;
+      std::size_t e = s.size();
+
+      while (b < e && std::isspace(static_cast<unsigned char>(s[b])))
+        ++b;
+      while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1])))
+        --e;
+
+      return std::string_view{s.data() + b, e - b};
+    }
   } // namespace detail
+
+  static inline const char *vix_getenv(const char *name) noexcept
+  {
+#if defined(_WIN32)
+    // _dupenv_s returns heap memory we must free.
+    static thread_local std::string value;
+    value.clear();
+
+    char *buf = nullptr;
+    size_t len = 0;
+
+    if (_dupenv_s(&buf, &len, name) != 0 || !buf)
+      return nullptr;
+
+    value.assign(buf);
+    free(buf);
+
+    return value.empty() ? nullptr : value.c_str();
+#else
+    return std::getenv(name);
+#endif
+  }
 
   /**
    * @brief Returns the value of an environment variable, or a default if not found.
@@ -95,11 +130,11 @@ namespace vix::utils
    */
   inline std::string env_or(std::string_view key, std::string_view def = "")
   {
-    if (const char *v = std::getenv(std::string(key).c_str()))
+    const std::string k(key); // stable null-terminated key
+    if (const char *v = vix_getenv(k.c_str()))
       return std::string(v);
     return std::string(def);
   }
-
   /**
    * @brief Reads an environment variable and interprets it as a boolean.
    *
@@ -120,21 +155,13 @@ namespace vix::utils
   {
     using namespace std::literals;
     const auto s = env_or(key, def ? "1"sv : "0"sv);
-
-    // Trim leading/trailing spaces
-    std::size_t b = 0, e = s.size();
-    while (b < e && std::isspace(static_cast<unsigned char>(s[b])))
-      ++b;
-    while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1])))
-      --e;
-    const std::string_view v{s.data() + b, e - b};
+    const std::string_view v = detail::trim(s);
 
     return v == "1"sv ||
            detail::iequals(v, "true") ||
            detail::iequals(v, "yes") ||
            detail::iequals(v, "on");
   }
-
   /**
    * @brief Reads an environment variable as a signed integer (base 10).
    *
@@ -153,21 +180,13 @@ namespace vix::utils
   inline int env_int(std::string_view key, int def = 0)
   {
     const auto s = env_or(key);
-    if (s.empty())
-      return def;
-
-    const char *first = s.data();
-    const char *last = s.data() + s.size();
-    while (first < last && std::isspace(static_cast<unsigned char>(*first)))
-      ++first;
-    while (last > first && std::isspace(static_cast<unsigned char>(*(last - 1))))
-      --last;
-    if (first >= last)
+    const std::string_view v = detail::trim(s);
+    if (v.empty())
       return def;
 
     int value = def;
-    const auto [ptr, ec] = std::from_chars(first, last, value, 10);
-    if (ec != std::errc{} || ptr != last)
+    const auto [ptr, ec] = std::from_chars(v.data(), v.data() + v.size(), value, 10);
+    if (ec != std::errc{} || ptr != v.data() + v.size())
       return def;
     return value;
   }
@@ -189,21 +208,13 @@ namespace vix::utils
   inline unsigned env_uint(std::string_view key, unsigned def = 0u)
   {
     const auto s = env_or(key);
-    if (s.empty())
-      return def;
-
-    const char *first = s.data();
-    const char *last = s.data() + s.size();
-    while (first < last && std::isspace(static_cast<unsigned char>(*first)))
-      ++first;
-    while (last > first && std::isspace(static_cast<unsigned char>(*(last - 1))))
-      --last;
-    if (first >= last)
+    const std::string_view v = detail::trim(s);
+    if (v.empty())
       return def;
 
     unsigned value = def;
-    const auto [ptr, ec] = std::from_chars(first, last, value, 10);
-    if (ec != std::errc{} || ptr != last)
+    const auto [ptr, ec] = std::from_chars(v.data(), v.data() + v.size(), value, 10);
+    if (ec != std::errc{} || ptr != v.data() + v.size())
       return def;
     return value;
   }
@@ -225,14 +236,18 @@ namespace vix::utils
   inline double env_double(std::string_view key, double def = 0.0)
   {
     const auto s = env_or(key);
-    if (s.empty())
+    const std::string_view v = detail::trim(s);
+    if (v.empty())
       return def;
 
+    const std::string tmp(v); // ensure null-terminated for strtod
     char *endp = nullptr;
-    const double v = std::strtod(s.c_str(), &endp);
+    const double out = std::strtod(tmp.c_str(), &endp);
+
     if (!endp || *endp != '\0')
       return def;
-    return v;
+
+    return out;
   }
 
 } // namespace Vix::utils
