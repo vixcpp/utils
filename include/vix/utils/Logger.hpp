@@ -28,7 +28,7 @@
  * auto &log = vix::utils::Logger::getInstance();
  *
  * // Optional: set explicit level (otherwise uses VIX_LOG_LEVEL or defaults to INFO)
- * log.setLevel(vix::utils::Logger::Level::INFO);
+ * log.setLevel(vix::utils::Logger::Level::Info);
  *
  * // Optional: override console pattern
  * // Example: compact + colored level
@@ -45,14 +45,14 @@
  * log.setContext(ctx);
  *
  * log.info("User {} logged in", user);
- * log.logf(vix::utils::Logger::Level::INFO, "Login ok",
+ * log.logf(vix::utils::Logger::Level::Info, "Login ok",
  *          "user", user.c_str(),
  *          "latency_ms", 12);
  * @endcode
  */
 
 #if defined(_WIN32)
-// Windows headers sometimes define macros like ERROR/DEBUG/min/max.
+// Windows headers sometimes define macros like ERROR/DEBUG/INFO/min/max.
 // They break enum values or common identifiers.
 
 #if defined(ERROR)
@@ -65,6 +65,12 @@
 #pragma push_macro("DEBUG")
 #undef DEBUG
 #define VIX_UTILS_RESTORE_DEBUG_MACRO 1
+#endif
+
+#if defined(INFO)
+#pragma push_macro("INFO")
+#undef INFO
+#define VIX_UTILS_RESTORE_INFO_MACRO 1
 #endif
 
 #if defined(min)
@@ -141,13 +147,13 @@ namespace vix::utils
      */
     enum class Level
     {
-      TRACE,
-      DEBUG,
-      INFO,
-      WARN,
-      ERROR,
-      CRITICAL,
-      OFF
+      Trace,
+      Debug,
+      Info,
+      Warn,
+      Error,
+      Critical,
+      Off
     };
 
     /**
@@ -222,7 +228,7 @@ namespace vix::utils
     template <typename... Args>
     void trace(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      log(Level::TRACE, fmtstr, std::forward<Args>(args)...);
+      log(Level::Trace, fmtstr, std::forward<Args>(args)...);
     }
 
     /**
@@ -231,7 +237,7 @@ namespace vix::utils
     template <typename... Args>
     void debug(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      log(Level::DEBUG, fmtstr, std::forward<Args>(args)...);
+      log(Level::Debug, fmtstr, std::forward<Args>(args)...);
     }
 
     /**
@@ -240,7 +246,7 @@ namespace vix::utils
     template <typename... Args>
     void info(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      log(Level::INFO, fmtstr, std::forward<Args>(args)...);
+      log(Level::Info, fmtstr, std::forward<Args>(args)...);
     }
 
     /**
@@ -249,7 +255,7 @@ namespace vix::utils
     template <typename... Args>
     void warn(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      log(Level::WARN, fmtstr, std::forward<Args>(args)...);
+      log(Level::Warn, fmtstr, std::forward<Args>(args)...);
     }
 
     /**
@@ -258,7 +264,7 @@ namespace vix::utils
     template <typename... Args>
     void error(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      log(Level::ERROR, fmtstr, std::forward<Args>(args)...);
+      log(Level::Error, fmtstr, std::forward<Args>(args)...);
     }
 
     /**
@@ -267,7 +273,7 @@ namespace vix::utils
     template <typename... Args>
     void critical(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      log(Level::CRITICAL, fmtstr, std::forward<Args>(args)...);
+      log(Level::Critical, fmtstr, std::forward<Args>(args)...);
     }
 
     /**
@@ -282,7 +288,7 @@ namespace vix::utils
     template <typename... Args>
     void log(Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      if (level == Level::OFF)
+      if (level == Level::Off)
         return;
 
       std::shared_ptr<spdlog::logger> spd;
@@ -322,7 +328,7 @@ namespace vix::utils
                    fmt::format_string<Args...> fmtstr,
                    Args &&...args)
     {
-      if (level == Level::OFF)
+      if (level == Level::Off)
         return;
 
       std::shared_ptr<spdlog::logger> spd;
@@ -357,7 +363,7 @@ namespace vix::utils
     [[noreturn]] void throwError(fmt::format_string<Args...> fmtstr, Args &&...args)
     {
       auto msg = fmt::format(fmtstr, std::forward<Args>(args)...);
-      log(Level::ERROR, "{}", msg);
+      log(Level::Error, "{}", msg);
       throw std::runtime_error(msg);
     }
 
@@ -366,7 +372,7 @@ namespace vix::utils
      */
     [[noreturn]] void throwError(const std::string &msg)
     {
-      log(Level::ERROR, "{}", msg);
+      log(Level::Error, "{}", msg);
       throw std::runtime_error(msg);
     }
 
@@ -441,7 +447,7 @@ namespace vix::utils
     template <typename... Args>
     void logf(Level level, const std::string &msg, Args &&...kvpairs)
     {
-      if (level == Level::OFF)
+      if (level == Level::Off)
         return;
 
       std::lock_guard<std::mutex> lock(mutex_);
@@ -500,7 +506,7 @@ namespace vix::utils
      */
     static Level parseLevelFromEnv(
         std::string_view envName = "VIX_LOG_LEVEL",
-        Level fallback = Level::WARN);
+        Level fallback = Level::Warn);
 
     /**
      * @brief Whether pretty JSON output should include ANSI colors.
@@ -514,22 +520,22 @@ namespace vix::utils
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (!spd_)
-        return Level::OFF;
+        return Level::Off;
 
       const auto lvl = spd_->level();
       if (lvl == spdlog::level::trace)
-        return Level::TRACE;
+        return Level::Trace;
       if (lvl == spdlog::level::debug)
-        return Level::DEBUG;
+        return Level::Debug;
       if (lvl == spdlog::level::info)
-        return Level::INFO;
+        return Level::Info;
       if (lvl == spdlog::level::warn)
-        return Level::WARN;
+        return Level::Warn;
       if (lvl == spdlog::level::err)
-        return Level::ERROR;
+        return Level::Error;
       if (lvl == spdlog::level::critical)
-        return Level::CRITICAL;
-      return Level::OFF;
+        return Level::Critical;
+      return Level::Off;
     }
 
     /**
@@ -556,19 +562,19 @@ namespace vix::utils
     {
       switch (level)
       {
-      case Level::TRACE:
+      case Level::Trace:
         return spdlog::level::trace;
-      case Level::DEBUG:
+      case Level::Debug:
         return spdlog::level::debug;
-      case Level::INFO:
+      case Level::Info:
         return spdlog::level::info;
-      case Level::WARN:
+      case Level::Warn:
         return spdlog::level::warn;
-      case Level::ERROR:
+      case Level::Error:
         return spdlog::level::err;
-      case Level::CRITICAL:
+      case Level::Critical:
         return spdlog::level::critical;
-      case Level::OFF:
+      case Level::Off:
         return spdlog::level::off;
       default:
         return spdlog::level::info;
@@ -715,19 +721,19 @@ namespace vix::utils
     {
       switch (level)
       {
-      case Level::TRACE:
+      case Level::Trace:
         return "trace";
-      case Level::DEBUG:
+      case Level::Debug:
         return "debug";
-      case Level::INFO:
+      case Level::Info:
         return "info";
-      case Level::WARN:
+      case Level::Warn:
         return "warn";
-      case Level::ERROR:
+      case Level::Error:
         return "error";
-      case Level::CRITICAL:
+      case Level::Critical:
         return "critical";
-      case Level::OFF:
+      case Level::Off:
         return "off";
       default:
         return "info";
@@ -1073,6 +1079,28 @@ namespace vix::utils
     static std::string c_bool(std::string_view s, bool on) { return ansi_wrap("\033[35m", s, on); }
     static std::string c_punc(std::string_view s, bool on) { return ansi_wrap("\033[90m", s, on); }
 
+    static inline const char *vix_getenv(const char *name) noexcept
+    {
+#if defined(_WIN32)
+      // _dupenv_s returns heap memory we must free.
+      static thread_local std::string value;
+      value.clear();
+
+      char *buf = nullptr;
+      size_t len = 0;
+
+      if (_dupenv_s(&buf, &len, name) != 0 || !buf)
+        return nullptr;
+
+      value.assign(buf);
+      free(buf);
+
+      return value.empty() ? nullptr : value.c_str();
+#else
+      return std::getenv(name);
+#endif
+    }
+
     /**
      * @brief Whether console synchronization is enabled.
      *
@@ -1082,7 +1110,7 @@ namespace vix::utils
      */
     static bool console_sync_enabled()
     {
-      if (const char *v = std::getenv("VIX_CONSOLE_SYNC"); v && *v)
+      if (const char *v = vix_getenv("VIX_CONSOLE_SYNC"); v && *v)
         return std::string_view(v) != "0" && std::string_view(v) != "false";
       return false;
     }
@@ -1105,6 +1133,11 @@ namespace vix::utils
 #if defined(VIX_UTILS_RESTORE_DEBUG_MACRO)
 #pragma pop_macro("DEBUG")
 #undef VIX_UTILS_RESTORE_DEBUG_MACRO
+#endif
+
+#if defined(VIX_UTILS_RESTORE_INFO_MACRO)
+#pragma pop_macro("INFO")
+#undef VIX_UTILS_RESTORE_INFO_MACRO
 #endif
 
 #if defined(VIX_UTILS_RESTORE_ERROR_MACRO)
