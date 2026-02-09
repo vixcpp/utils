@@ -105,6 +105,7 @@
 #include <spdlog/spdlog.h>
 
 #include <vix/utils/ConsoleMutex.hpp>
+#include <vix/utils/Env.hpp>
 
 #if defined(SPDLOG_FMT_EXTERNAL)
 #include <fmt/format.h>
@@ -1079,28 +1080,6 @@ namespace vix::utils
     static std::string c_bool(std::string_view s, bool on) { return ansi_wrap("\033[35m", s, on); }
     static std::string c_punc(std::string_view s, bool on) { return ansi_wrap("\033[90m", s, on); }
 
-    static inline const char *vix_getenv(const char *name) noexcept
-    {
-#if defined(_WIN32)
-      // _dupenv_s returns heap memory we must free.
-      static thread_local std::string value;
-      value.clear();
-
-      char *buf = nullptr;
-      size_t len = 0;
-
-      if (_dupenv_s(&buf, &len, name) != 0 || !buf)
-        return nullptr;
-
-      value.assign(buf);
-      free(buf);
-
-      return value.empty() ? nullptr : value.c_str();
-#else
-      return std::getenv(name);
-#endif
-    }
-
     /**
      * @brief Whether console synchronization is enabled.
      *
@@ -1110,7 +1089,7 @@ namespace vix::utils
      */
     static bool console_sync_enabled()
     {
-      if (const char *v = vix_getenv("VIX_CONSOLE_SYNC"); v && *v)
+      if (const char *v = vix::utils::vix_getenv("VIX_CONSOLE_SYNC"); v && *v)
         return std::string_view(v) != "0" && std::string_view(v) != "false";
       return false;
     }
