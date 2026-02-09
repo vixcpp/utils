@@ -80,8 +80,8 @@ int main()
   const bool async_mode = env_bool("VIX_LOG_ASYNC", true);
   log.setAsync(async_mode);
   log.setLevel(env_bool("VIX_LOG_DEBUG", false)
-                   ? Logger::Level::DEBUG
-                   : Logger::Level::INFO);
+                   ? Logger::Level::Debug
+                   : Logger::Level::Info);
 
   // Contextual metadata (useful for distributed tracing)
   Logger::Context cx;
@@ -92,13 +92,13 @@ int main()
   log.setContext(cx);
 
   // Log examples
-  log.log(Logger::Level::INFO, "Hello from utils/log_demo");
-  log.log(Logger::Level::DEBUG, "Debug enabled = {}", env_bool("VIX_LOG_DEBUG", false));
+  log.log(Logger::Level::Info, "Hello from utils/log_demo");
+  log.log(Logger::Level::Debug, "Debug enabled = {}", env_bool("VIX_LOG_DEBUG", false));
 
   // Structured key-value logging
-  log.logf(Logger::Level::INFO, "Boot args", "port", env_int("APP_PORT", 8080), "async", async_mode);
+  log.logf(Logger::Level::Info, "Boot args", "port", env_int("APP_PORT", 8080), "async", async_mode);
 
-  log.log(Logger::Level::WARN, "This is a warning");
+  log.log(Logger::Level::Warn, "This is a warning");
 
   // Uncomment for error test
   // log.throwError("Demo error: {}", "something went wrong");

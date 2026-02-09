@@ -77,21 +77,21 @@ int main()
   // Logger setup (pattern & level)
   auto &log = Logger::getInstance();
   log.setPattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-  log.setLevel(Logger::Level::INFO);
+  log.setLevel(Logger::Level::Info);
 
   // Validation process
   const auto r = validate_map(data, sch);
 
   if (r.is_ok())
   {
-    log.log(Logger::Level::INFO, "Validation OK");
+    log.log(Logger::Level::Info, "Validation OK");
     return 0;
   }
 
-  log.log(Logger::Level::ERROR, "Validation FAILED:");
+  log.log(Logger::Level::Error, "Validation FAILED:");
   for (const auto &kv : r.error())
   {
-    log.log(Logger::Level::ERROR, " - {} -> {}", kv.first, kv.second);
+    log.log(Logger::Level::Error, " - {} -> {}", kv.first, kv.second);
   }
 
   return 1;

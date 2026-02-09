@@ -18,7 +18,6 @@
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/ansicolor_sink.h>
 
-#include <cstdlib>
 #include <cctype>
 #include <string>
 #include <string_view>
@@ -49,28 +48,28 @@ namespace vix::utils
     const auto v = lower_copy(s);
 
     if (v == "off" || v == "never" || v == "none" || v == "silent" || v == "0")
-      return Level::OFF;
+      return Level::Off;
 
     if (v == "trace")
-      return Level::TRACE;
+      return Level::Trace;
     if (v == "debug")
-      return Level::DEBUG;
+      return Level::Debug;
     if (v == "info")
-      return Level::INFO;
+      return Level::Info;
     if (v == "warn" || v == "warning")
-      return Level::WARN;
+      return Level::Warn;
     if (v == "error")
-      return Level::ERROR;
+      return Level::Error;
     if (v == "critical" || v == "fatal")
-      return Level::CRITICAL;
+      return Level::Critical;
 
-    return Level::WARN;
+    return Level::Warn;
   }
 
   Logger::Level Logger::parseLevelFromEnv(std::string_view envName, Level fallback)
   {
     const std::string key(envName);
-    const char *raw = std::getenv(key.c_str());
+    const char *raw = vix_getenv(key.c_str());
     if (!raw || !*raw)
       return fallback;
     return parseLevel(raw);
@@ -78,7 +77,7 @@ namespace vix::utils
 
   void Logger::setLevelFromEnv(std::string_view envName)
   {
-    setLevel(parseLevelFromEnv(envName, Level::INFO));
+    setLevel(parseLevelFromEnv(envName, Level::Info));
   }
 
   Logger::Logger() : spd_(nullptr), mutex_()
@@ -98,7 +97,7 @@ namespace vix::utils
           "vix",
           spdlog::sinks_init_list{console_sink});
       // Default INFO, override with env VIX_LOG_LEVEL
-      auto lvl = toSpdLevel(parseLevelFromEnv("VIX_LOG_LEVEL", Level::INFO));
+      auto lvl = toSpdLevel(parseLevelFromEnv("VIX_LOG_LEVEL", Level::Info));
       spd_->set_level(lvl);
       setFormatFromEnv("VIX_LOG_FORMAT");
       // flush on warn+ (keep it snappy)
@@ -223,7 +222,7 @@ namespace vix::utils
   void Logger::setFormatFromEnv(std::string_view envName)
   {
     const std::string key(envName);
-    const char *raw = std::getenv(key.c_str());
+    const char *raw = vix_getenv(key.c_str());
     if (!raw || !*raw)
       return;
     setFormat(parseFormat(raw));
@@ -231,10 +230,10 @@ namespace vix::utils
 
   bool Logger::jsonColorsEnabled()
   {
-    if (const char *nc = std::getenv("NO_COLOR"); nc && *nc)
+    if (const char *nc = vix_getenv("NO_COLOR"); nc && *nc)
       return false;
 
-    if (const char *c = std::getenv("VIX_COLOR"); c && *c)
+    if (const char *c = vix_getenv("VIX_COLOR"); c && *c)
     {
       const std::string v = lower_copy(c);
 
