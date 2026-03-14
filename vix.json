@@ -1,0 +1,28 @@
+{
+  "name": "utils",
+  "namespace": "vix",
+  "version": "0.1.0",
+  "type": "header-and-source",
+  "include": "include",
+  "src": "src",
+  "license": "MIT",
+  "description": "General utility components for Vix.cpp: logging, UUID, environment utilities, validation, scope guards, and helper types.",
+  "keywords": [
+    "cpp",
+    "vix",
+    "utils",
+    "logging",
+    "uuid",
+    "validation",
+    "env",
+    "helpers",
+    "utilities"
+  ],
+  "repository": "https://github.com/vixcpp/utils",
+  "authors": [
+    {
+      "name": "Gaspard Kirira",
+      "github": "Gaspardkirira"
+    }
+  ]
+}
