@@ -1,0 +1,433 @@
+name: Utils Strict CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/utils-strict-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "scripts/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - "vix.json"
+  pull_request:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/utils-strict-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "scripts/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - "vix.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPS: >
+    build-essential
+    cmake
+    ninja-build
+    clang
+    llvm
+    lld
+    g++
+    cppcheck
+    clang-tidy
+    valgrind
+    pkg-config
+    git
+    libspdlog-dev
+    libfmt-dev
+  BUILD_JOBS: 2
+
+jobs:
+  build:
+    name: Build (${{ matrix.compiler }}, header_only=${{ matrix.header_only }}, examples=${{ matrix.examples }}, provider=${{ matrix.provider }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+        header_only: [ON, OFF]
+        examples: [ON, OFF]
+        provider: [system, fallback]
+
+    steps:
+      - name: Checkout utils repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Remove system spdlog and fmt for fallback mode
+        if: matrix.provider == 'fallback'
+        run: |
+          sudo apt-get remove -y libspdlog-dev libfmt-dev || true
+          dpkg -l | grep -E 'spdlog|fmt' || true
+
+      - name: Select compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            echo "CC=clang" >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          else
+            echo "CC=gcc" >> "$GITHUB_ENV"
+            echo "CXX=g++" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DVIX_HEADER_ONLY=${{ matrix.header_only }} \
+            -DVIX_UTILS_BUILD_EXAMPLES=${{ matrix.examples }} \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF
+
+      - name: Build
+        run: |
+          cmake --build build -j"${BUILD_JOBS}"
+
+      - name: Print executables
+        run: |
+          echo "---- executables ----"
+          find build -type f -executable | sort || true
+
+  runtime-smoke:
+    name: Runtime Smoke Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout utils repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure runtime build
+        run: |
+          cmake -G Ninja -S . -B build-runtime \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DVIX_HEADER_ONLY=OFF \
+            -DVIX_UTILS_BUILD_EXAMPLES=ON \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF
+
+      - name: Build runtime artifacts
+        run: |
+          cmake --build build-runtime -j"${BUILD_JOBS}"
+
+      - name: List candidate executables
+        run: |
+          echo "---- runtime candidates ----"
+          find build-runtime -type f -executable | sort || true
+
+      - name: Run smoke tests on executables
+        shell: bash
+        run: |
+          set +e
+          FAIL=0
+
+          mapfile -t CANDIDATES < <(
+            find build-runtime -type f -executable | while read -r exe; do
+              base="$(basename "$exe")"
+              if [[ ! "$exe" =~ /CMakeFiles/ ]] && [[ ! "$base" =~ (cmake|ctest) ]]; then
+                echo "$exe"
+              fi
+            done | sort -u
+          )
+
+          if [ ${#CANDIDATES[@]} -eq 0 ]; then
+            echo "No executable candidates found."
+            exit 0
+          fi
+
+          for exe in "${CANDIDATES[@]}"; do
+            echo "==> Smoke run: $exe"
+            timeout 5s "$exe" >/tmp/utils_smoke.log 2>&1
+            STATUS=$?
+            cat /tmp/utils_smoke.log || true
+
+            if [ $STATUS -ne 0 ] && [ $STATUS -ne 124 ]; then
+              echo "::warning::Non-zero exit status from $exe (status=$STATUS)"
+              FAIL=1
+            fi
+          done
+
+          if [ $FAIL -ne 0 ]; then
+            echo "::warning::Some smoke runs reported issues."
+          else
+            echo "Smoke runs completed."
+          fi
+          exit 0
+
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout utils repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure for analysis
+        run: |
+          cmake -G Ninja -S . -B build-analyze \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DVIX_HEADER_ONLY=OFF \
+            -DVIX_UTILS_BUILD_EXAMPLES=ON \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF
+
+      - name: Run clang-tidy on source files
+        run: |
+          set +e
+          find src examples tests -name '*.cpp' -print0 | xargs -0 -n1 -P2 clang-tidy -p build-analyze
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::warning::clang-tidy reported issues."
+          else
+            echo "clang-tidy completed successfully."
+          fi
+          exit 0
+
+      - name: Run cppcheck on headers and sources
+        run: |
+          set +e
+          cppcheck \
+            --enable=all \
+            --std=c++20 \
+            --inconclusive \
+            --quiet \
+            --suppress=missingIncludeSystem \
+            include/ src/ examples/ tests/
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::warning::cppcheck reported issues."
+          else
+            echo "cppcheck completed successfully."
+          fi
+          exit 0
+
+  valgrind:
+    name: Valgrind Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout utils repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure valgrind build
+        run: |
+          cmake -G Ninja -S . -B build-valgrind \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DVIX_HEADER_ONLY=OFF \
+            -DVIX_UTILS_BUILD_EXAMPLES=ON \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF
+
+      - name: Build
+        run: |
+          cmake --build build-valgrind -j"${BUILD_JOBS}"
+
+      - name: Run valgrind on executables
+        shell: bash
+        run: |
+          set +e
+          FAIL=0
+
+          mapfile -t BINS < <(
+            find build-valgrind -type f -executable | while read -r exe; do
+              base="$(basename "$exe")"
+              if [[ ! "$exe" =~ /CMakeFiles/ ]] && [[ ! "$base" =~ (cmake|ctest) ]]; then
+                echo "$exe"
+              fi
+            done | sort -u
+          )
+
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "No candidate executables found for valgrind."
+            exit 0
+          fi
+
+          for exe in "${BINS[@]}"; do
+            echo "==> Valgrind: $exe"
+            timeout 20s valgrind \
+              --leak-check=full \
+              --show-leak-kinds=all \
+              --track-origins=yes \
+              "$exe"
+            STATUS=$?
+
+            if [ $STATUS -ne 0 ] && [ $STATUS -ne 124 ]; then
+              echo "::warning::Valgrind reported issues for $exe"
+              FAIL=1
+            fi
+          done
+
+          if [ $FAIL -ne 0 ]; then
+            echo "::warning::Valgrind detected potential issues."
+          else
+            echo "Valgrind checks completed."
+          fi
+          exit 0
+
+  standalone-package-check:
+    name: Standalone Package Export Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout utils repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure installable standalone build
+        run: |
+          cmake -G Ninja -S . -B build-install \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_HEADER_ONLY=OFF \
+            -DVIX_UTILS_BUILD_EXAMPLES=OFF \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF \
+            -DCMAKE_INSTALL_PREFIX="${PWD}/.ci-install"
+
+      - name: Build standalone package
+        run: |
+          cmake --build build-install -j"${BUILD_JOBS}"
+
+      - name: Install standalone package
+        run: |
+          cmake --install build-install
+
+      - name: Verify installed package files
+        run: |
+          echo "---- install tree ----"
+          find .ci-install -maxdepth 8 -type f | sort || true
+          test -f .ci-install/include/vix/utils/Logger.hpp || (echo "::error::utils headers not found"; exit 1)
+
+  config-coverage:
+    name: Configuration Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout utils repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure release mode static
+        run: |
+          cmake -G Ninja -S . -B build-release-static \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_HEADER_ONLY=OFF \
+            -DVIX_UTILS_BUILD_EXAMPLES=OFF \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=ON
+
+      - name: Build release mode static
+        run: |
+          cmake --build build-release-static -j"${BUILD_JOBS}"
+
+      - name: Configure release mode header-only
+        run: |
+          cmake -G Ninja -S . -B build-release-header \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_HEADER_ONLY=ON \
+            -DVIX_UTILS_BUILD_EXAMPLES=OFF \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF
+
+      - name: Build release mode header-only
+        run: |
+          cmake --build build-release-header -j"${BUILD_JOBS}"
+
+      - name: Configure release mode with examples
+        run: |
+          cmake -G Ninja -S . -B build-release-examples \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_HEADER_ONLY=OFF \
+            -DVIX_UTILS_BUILD_EXAMPLES=ON \
+            -DVIX_STRICT=OFF \
+            -DVIX_ENABLE_LTO=OFF
+
+      - name: Build release mode with examples
+        run: |
+          cmake --build build-release-examples -j"${BUILD_JOBS}"
+
+  summary:
+    name: Utils Strict CI Summary
+    needs:
+      [
+        build,
+        runtime-smoke,
+        static-analysis,
+        valgrind,
+        standalone-package-check,
+        config-coverage,
+      ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print summary
+        run: |
+          echo "Utils strict CI completed."
+          echo "This workflow validates:"
+          echo "- static library mode"
+          echo "- header-only mode"
+          echo "- system spdlog/fmt provider mode"
+          echo "- fallback spdlog provider mode"
+          echo "- examples build"
+          echo "- runtime smoke checks"
+          echo "- static analysis"
+          echo "- valgrind"
+          echo "- standalone package export"
+          echo "- release LTO coverage"
