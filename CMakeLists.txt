@@ -181,8 +181,13 @@ endif()
 if (TARGET vix_warnings)
   target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_warnings)
 else()
+  set(_VIX_UTILS_WARN_SCOPE PRIVATE)
+  if (VIX_HEADER_ONLY)
+    set(_VIX_UTILS_WARN_SCOPE INTERFACE)
+  endif()
+
   if (NOT MSVC)
-    target_compile_options(vix_utils PRIVATE
+    target_compile_options(vix_utils ${_VIX_UTILS_WARN_SCOPE}
       -Wall -Wextra -Wpedantic
       -Wno-array-bounds
       -Wno-stringop-overflow
@@ -190,7 +195,7 @@ else()
   endif()
 
   if (VIX_STRICT AND NOT MSVC)
-    target_compile_options(vix_utils PRIVATE -Werror)
+    target_compile_options(vix_utils ${_VIX_UTILS_WARN_SCOPE} -Werror)
   endif()
 endif()
 
