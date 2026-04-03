@@ -640,9 +640,11 @@ namespace vix::utils
         bool color)
     {
       const std::string lbl = pad_label(label);
+
       std::cerr << "  "
                 << reset_style(icon, color) << " "
                 << (color ? bold(white_bright(lbl, true), true) : lbl)
+                << " "
                 << (dim_value ? dim(value, color) : link(value, color))
                 << "\n";
     }
