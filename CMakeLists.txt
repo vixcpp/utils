@@ -96,36 +96,10 @@ else()
 endif()
 
 # -------------------------
-# Dependencies: spdlog (+ fmt when external)
+# Dependencies: spdlog + fmt (system)
 # -------------------------
-include(FetchContent)
-
-find_package(spdlog CONFIG QUIET)
-find_package(fmt CONFIG QUIET)
-
-# If spdlog is missing, fetch it (bundled fmt)
-if (NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
-  message(STATUS "[utils] spdlog not found -> fetching spdlog (bundled fmt)")
-
-  FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.14.1
-  )
-
-  set(SPDLOG_BUILD_SHARED  OFF CACHE BOOL "" FORCE)
-  set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
-  set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
-  set(SPDLOG_BUILD_BENCH   OFF CACHE BOOL "" FORCE)
-  set(SPDLOG_FMT_EXTERNAL  OFF CACHE BOOL "" FORCE)
-
-  FetchContent_MakeAvailable(spdlog)
-endif()
-
-set(_VIX_UTILS_SCOPE PUBLIC)
-if (VIX_HEADER_ONLY)
-  set(_VIX_UTILS_SCOPE INTERFACE)
-endif()
+find_package(spdlog CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 
 # Choose best spdlog target
 set(_VIX_SPDLOG_TARGET "")
@@ -134,10 +108,10 @@ if (TARGET spdlog::spdlog)
 elseif (TARGET spdlog::spdlog_header_only)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
 else()
-  message(FATAL_ERROR "[utils] spdlog target not found after fallback.")
+  message(FATAL_ERROR "[utils] spdlog target not found.")
 endif()
 
-target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} ${_VIX_SPDLOG_TARGET})
+target_link_libraries(vix_utils PRIVATE ${_VIX_SPDLOG_TARGET})
 
 # Detect if spdlog requires external fmt (SPDLOG_FMT_EXTERNAL)
 set(_VIX_SPDLOG_NEEDS_FMT OFF)
@@ -162,45 +136,65 @@ endif()
 
 if (_VIX_SPDLOG_NEEDS_FMT)
   if (TARGET fmt::fmt)
-    target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt)
+    target_link_libraries(vix_utils PRIVATE fmt::fmt)
   elseif (TARGET fmt::fmt-header-only)
-    target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} fmt::fmt-header-only)
+    target_link_libraries(vix_utils PRIVATE fmt::fmt-header-only)
   else()
     message(FATAL_ERROR "[utils] spdlog requires external fmt (SPDLOG_FMT_EXTERNAL) but fmt package was not found.")
   endif()
 endif()
-
 # -------------------------
 # Windows: prevent Win32 API usage by spdlog
 # -------------------------
 if (WIN32)
-  target_compile_definitions(vix_utils ${_VIX_UTILS_SCOPE} SPDLOG_NO_WIN32_API=1)
+  if (VIX_HEADER_ONLY)
+    target_compile_definitions(vix_utils INTERFACE SPDLOG_NO_WIN32_API=1)
+  else()
+    target_compile_definitions(vix_utils PRIVATE SPDLOG_NO_WIN32_API=1)
+  endif()
 endif()
 
 # Compiler warnings
 if (TARGET vix_warnings)
-  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_warnings)
-else()
-  set(_VIX_UTILS_WARN_SCOPE PRIVATE)
   if (VIX_HEADER_ONLY)
-    set(_VIX_UTILS_WARN_SCOPE INTERFACE)
+    target_link_libraries(vix_utils INTERFACE vix_warnings)
+  else()
+    target_link_libraries(vix_utils PRIVATE vix_warnings)
   endif()
+else()
+  if (VIX_HEADER_ONLY)
+    if (NOT MSVC)
+      target_compile_options(vix_utils INTERFACE
+        -Wall -Wextra -Wpedantic
+        -Wno-array-bounds
+        -Wno-stringop-overflow
+      )
+    endif()
 
-  if (NOT MSVC)
-    target_compile_options(vix_utils ${_VIX_UTILS_WARN_SCOPE}
-      -Wall -Wextra -Wpedantic
-      -Wno-array-bounds
-      -Wno-stringop-overflow
-    )
-  endif()
+    if (VIX_STRICT AND NOT MSVC)
+      target_compile_options(vix_utils INTERFACE -Werror)
+    endif()
+  else()
+    if (NOT MSVC)
+      target_compile_options(vix_utils PRIVATE
+        -Wall -Wextra -Wpedantic
+        -Wno-array-bounds
+        -Wno-stringop-overflow
+      )
+    endif()
 
-  if (VIX_STRICT AND NOT MSVC)
-    target_compile_options(vix_utils ${_VIX_UTILS_WARN_SCOPE} -Werror)
+    if (VIX_STRICT AND NOT MSVC)
+      target_compile_options(vix_utils PRIVATE -Werror)
+    endif()
   endif()
 endif()
 
 if (VIX_ENABLE_SANITIZERS AND TARGET vix_sanitizers)
-  target_link_libraries(vix_utils ${_VIX_UTILS_SCOPE} vix_sanitizers)
+  if (VIX_HEADER_ONLY)
+    target_link_libraries(vix_utils INTERFACE vix_sanitizers)
+  else()
+    target_link_libraries(vix_utils PRIVATE vix_sanitizers)
+  endif()
 endif()
 
 # LTO (Release)
