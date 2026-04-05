@@ -111,38 +111,21 @@ else()
   message(FATAL_ERROR "[utils] spdlog target not found.")
 endif()
 
-target_link_libraries(vix_utils PRIVATE ${_VIX_SPDLOG_TARGET})
-
-# Detect if spdlog requires external fmt (SPDLOG_FMT_EXTERNAL)
-set(_VIX_SPDLOG_NEEDS_FMT OFF)
-
-get_target_property(_spd_defs_iface ${_VIX_SPDLOG_TARGET} INTERFACE_COMPILE_DEFINITIONS)
-if (_spd_defs_iface)
-  foreach(d IN LISTS _spd_defs_iface)
-    if (d STREQUAL "SPDLOG_FMT_EXTERNAL" OR d MATCHES "^SPDLOG_FMT_EXTERNAL=")
-      set(_VIX_SPDLOG_NEEDS_FMT ON)
-    endif()
-  endforeach()
+# fmt is a direct dependency because Logger.hpp includes <fmt/ostream.h>
+if (TARGET fmt::fmt)
+  set(_VIX_FMT_TARGET fmt::fmt)
+elseif (TARGET fmt::fmt-header-only)
+  set(_VIX_FMT_TARGET fmt::fmt-header-only)
+else()
+  message(FATAL_ERROR "[utils] fmt target not found.")
 endif()
 
-get_target_property(_spd_defs ${_VIX_SPDLOG_TARGET} COMPILE_DEFINITIONS)
-if (_spd_defs)
-  foreach(d IN LISTS _spd_defs)
-    if (d STREQUAL "SPDLOG_FMT_EXTERNAL" OR d MATCHES "^SPDLOG_FMT_EXTERNAL=")
-      set(_VIX_SPDLOG_NEEDS_FMT ON)
-    endif()
-  endforeach()
-endif()
+target_link_libraries(vix_utils
+  PUBLIC
+    ${_VIX_SPDLOG_TARGET}
+    ${_VIX_FMT_TARGET}
+)
 
-if (_VIX_SPDLOG_NEEDS_FMT)
-  if (TARGET fmt::fmt)
-    target_link_libraries(vix_utils PRIVATE fmt::fmt)
-  elseif (TARGET fmt::fmt-header-only)
-    target_link_libraries(vix_utils PRIVATE fmt::fmt-header-only)
-  else()
-    message(FATAL_ERROR "[utils] spdlog requires external fmt (SPDLOG_FMT_EXTERNAL) but fmt package was not found.")
-  endif()
-endif()
 # -------------------------
 # Windows: prevent Win32 API usage by spdlog
 # -------------------------
