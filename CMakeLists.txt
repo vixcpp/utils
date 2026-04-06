@@ -96,26 +96,30 @@ else()
 endif()
 
 # -------------------------
-# Dependencies: spdlog + fmt (system)
+# Dependencies: spdlog + fmt
+# Prefer header-only targets to avoid runtime shared-library ABI issues
+# in released Linux binaries.
 # -------------------------
 find_package(spdlog CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 
-# Choose best spdlog target
 set(_VIX_SPDLOG_TARGET "")
-if (TARGET spdlog::spdlog)
-  set(_VIX_SPDLOG_TARGET spdlog::spdlog)
-elseif (TARGET spdlog::spdlog_header_only)
+set(_VIX_FMT_TARGET "")
+
+# Prefer header-only spdlog to avoid libspdlog.so runtime dependency
+if (TARGET spdlog::spdlog_header_only)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+elseif (TARGET spdlog::spdlog)
+  set(_VIX_SPDLOG_TARGET spdlog::spdlog)
 else()
   message(FATAL_ERROR "[utils] spdlog target not found.")
 endif()
 
-# fmt is a direct dependency because Logger.hpp includes <fmt/ostream.h>
-if (TARGET fmt::fmt)
-  set(_VIX_FMT_TARGET fmt::fmt)
-elseif (TARGET fmt::fmt-header-only)
+# Prefer header-only fmt to avoid libfmt.so runtime dependency
+if (TARGET fmt::fmt-header-only)
   set(_VIX_FMT_TARGET fmt::fmt-header-only)
+elseif (TARGET fmt::fmt)
+  set(_VIX_FMT_TARGET fmt::fmt)
 else()
   message(FATAL_ERROR "[utils] fmt target not found.")
 endif()
@@ -126,6 +130,11 @@ target_link_libraries(vix_utils
     ${_VIX_FMT_TARGET}
 )
 
+if (VIX_HEADER_ONLY)
+  target_compile_definitions(vix_utils INTERFACE SPDLOG_FMT_EXTERNAL=1)
+else()
+  target_compile_definitions(vix_utils PUBLIC SPDLOG_FMT_EXTERNAL=1)
+endif()
 # -------------------------
 # Windows: prevent Win32 API usage by spdlog
 # -------------------------
