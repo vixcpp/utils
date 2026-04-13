@@ -1,3 +1,2 @@
 @PACKAGE_INIT@
-# Charge les cibles exportées (installées dans lib/cmake/vix_utils)
 include("${CMAKE_CURRENT_LIST_DIR}/vix_utilsTargets.cmake")
