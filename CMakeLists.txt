@@ -56,6 +56,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_QUIET
 )
+
 if(NOT VIX_GIT_HASH)
   set(VIX_GIT_HASH "unknown")
 endif()
@@ -71,14 +72,18 @@ if(VIX_HEADER_ONLY)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
+
   target_compile_definitions(vix_utils INTERFACE
     VIX_GIT_HASH="${VIX_GIT_HASH}"
     VIX_BUILD_DATE="${VIX_BUILD_DATE}"
   )
 else()
   file(GLOB_RECURSE UTILS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+
   if(NOT UTILS_SOURCES)
-    message(FATAL_ERROR "No sources found under src/. If you want header-only, set VIX_HEADER_ONLY=ON")
+    message(FATAL_ERROR
+      "No sources found under src/. If you want header-only, set VIX_HEADER_ONLY=ON"
+    )
   endif()
 
   add_library(vix_utils STATIC ${UTILS_SOURCES})
@@ -96,33 +101,67 @@ else()
   )
 endif()
 
-# -------------------------
+# --------------------------------------------------------------------
 # Dependencies: spdlog + fmt
+# Resolution policy:
+#   1) Reuse existing targets if already available
+#   2) Try installed packages via find_package(...)
+#   3) Fail with a clear message if nothing is found
+#
 # Prefer header-only targets to avoid runtime shared-library ABI issues
 # in released Linux binaries.
-# -------------------------
-find_package(spdlog CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
-
+# --------------------------------------------------------------------
 set(_VIX_SPDLOG_TARGET "")
 set(_VIX_FMT_TARGET "")
 
-# Prefer header-only spdlog to avoid libspdlog.so runtime dependency
+# Reuse already available spdlog targets first
 if (TARGET spdlog::spdlog_header_only)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
 elseif (TARGET spdlog::spdlog)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog)
 else()
-  message(FATAL_ERROR "[utils] spdlog target not found.")
+  find_package(spdlog CONFIG QUIET)
+
+  if (TARGET spdlog::spdlog_header_only)
+    set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+  elseif (TARGET spdlog::spdlog)
+    set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+  endif()
 endif()
 
-# Prefer header-only fmt to avoid libfmt.so runtime dependency
+# Reuse already available fmt targets first
 if (TARGET fmt::fmt-header-only)
   set(_VIX_FMT_TARGET fmt::fmt-header-only)
 elseif (TARGET fmt::fmt)
   set(_VIX_FMT_TARGET fmt::fmt)
 else()
-  message(FATAL_ERROR "[utils] fmt target not found.")
+  find_package(fmt CONFIG QUIET)
+
+  if (TARGET fmt::fmt-header-only)
+    set(_VIX_FMT_TARGET fmt::fmt-header-only)
+  elseif (TARGET fmt::fmt)
+    set(_VIX_FMT_TARGET fmt::fmt)
+  endif()
+endif()
+
+if (NOT _VIX_SPDLOG_TARGET)
+  message(FATAL_ERROR
+    "[utils] spdlog not found.\n"
+    "Expected one of:\n"
+    "  - existing target: spdlog::spdlog_header_only or spdlog::spdlog\n"
+    "  - installed package resolvable via find_package(spdlog CONFIG)\n"
+    "Make sure spdlog is installed and visible through CMAKE_PREFIX_PATH or spdlog_DIR."
+  )
+endif()
+
+if (NOT _VIX_FMT_TARGET)
+  message(FATAL_ERROR
+    "[utils] fmt not found.\n"
+    "Expected one of:\n"
+    "  - existing target: fmt::fmt-header-only or fmt::fmt\n"
+    "  - installed package resolvable via find_package(fmt CONFIG)\n"
+    "Make sure fmt is installed and visible through CMAKE_PREFIX_PATH or fmt_DIR."
+  )
 endif()
 
 target_link_libraries(vix_utils
@@ -136,9 +175,10 @@ if (VIX_HEADER_ONLY)
 else()
   target_compile_definitions(vix_utils PUBLIC SPDLOG_FMT_EXTERNAL=1)
 endif()
-# -------------------------
+
+# --------------------------------------------------------------------
 # Windows: prevent Win32 API usage by spdlog
-# -------------------------
+# --------------------------------------------------------------------
 if (WIN32)
   if (VIX_HEADER_ONLY)
     target_compile_definitions(vix_utils INTERFACE SPDLOG_NO_WIN32_API=1)
@@ -158,7 +198,9 @@ else()
   if (VIX_HEADER_ONLY)
     if (NOT MSVC)
       target_compile_options(vix_utils INTERFACE
-        -Wall -Wextra -Wpedantic
+        -Wall
+        -Wextra
+        -Wpedantic
         -Wno-array-bounds
         -Wno-stringop-overflow
       )
@@ -170,7 +212,9 @@ else()
   else()
     if (NOT MSVC)
       target_compile_options(vix_utils PRIVATE
-        -Wall -Wextra -Wpedantic
+        -Wall
+        -Wextra
+        -Wpedantic
         -Wno-array-bounds
         -Wno-stringop-overflow
       )
@@ -194,6 +238,7 @@ endif()
 if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release")
   include(CheckIPOSupported)
   check_ipo_supported(RESULT ipo_ok OUTPUT ipo_msg)
+
   if(ipo_ok)
     set_property(TARGET vix_utils PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
   else()
@@ -201,7 +246,7 @@ if(VIX_ENABLE_LTO AND NOT VIX_HEADER_ONLY AND CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
-# Install / Export (umbrella)
+# Install / Export (umbrella + standalone package)
 set_target_properties(vix_utils PROPERTIES
   EXPORT_NAME utils
   OUTPUT_NAME vix_utils
@@ -225,7 +270,8 @@ else()
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+)
 
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vix_utilsConfig.cmake.in"
@@ -254,17 +300,21 @@ install(EXPORT VixTargets
 # Examples (opt-in)
 if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-  add_executable(utils_log_demo         examples/log_demo.cpp)
+
+  add_executable(utils_log_demo examples/log_demo.cpp)
   target_link_libraries(utils_log_demo PRIVATE vix::utils)
 
-  add_executable(utils_validation_demo  examples/validation_demo.cpp)
+  add_executable(utils_validation_demo examples/validation_demo.cpp)
   target_link_libraries(utils_validation_demo PRIVATE vix::utils)
 
-  add_executable(utils_env_time_uuid    examples/env_time_uuid.cpp)
+  add_executable(utils_env_time_uuid examples/env_time_uuid.cpp)
   target_link_libraries(utils_env_time_uuid PRIVATE vix::utils)
 
   add_custom_target(utils_examples ALL
-    DEPENDS utils_log_demo utils_validation_demo utils_env_time_uuid
+    DEPENDS
+      utils_log_demo
+      utils_validation_demo
+      utils_env_time_uuid
   )
 endif()
 
@@ -274,3 +324,6 @@ if(DEFINED UTILS_SOURCES AND NOT VIX_HEADER_ONLY)
 else()
   message(STATUS "Utils header-only mode or no sources listed")
 endif()
+
+message(STATUS "Utils spdlog target: ${_VIX_SPDLOG_TARGET}")
+message(STATUS "Utils fmt target: ${_VIX_FMT_TARGET}")
