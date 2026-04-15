@@ -201,11 +201,19 @@ if (NOT _VIX_FMT_TARGET)
   )
 endif()
 
-target_link_libraries(vix_utils
-  PUBLIC
-    ${_VIX_SPDLOG_TARGET}
-    ${_VIX_FMT_TARGET}
-)
+if (VIX_HEADER_ONLY)
+  target_link_libraries(vix_utils
+    INTERFACE
+      ${_VIX_SPDLOG_TARGET}
+      ${_VIX_FMT_TARGET}
+  )
+else()
+  target_link_libraries(vix_utils
+    PUBLIC
+      ${_VIX_SPDLOG_TARGET}
+      ${_VIX_FMT_TARGET}
+  )
+endif()
 
 if (VIX_HEADER_ONLY)
   target_compile_definitions(vix_utils INTERFACE SPDLOG_FMT_EXTERNAL=1)
