@@ -36,6 +36,7 @@ project(vix_utils VERSION 1.5.2 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
+include(CMakePackageConfigHelpers)
 
 # Options
 option(VIX_STRICT               "Treat warnings as errors"                  OFF)
@@ -225,6 +226,30 @@ endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vix_utilsConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfig.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vix_utils"
+)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/vix_utilsConfigVersion.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vix_utils"
+)
+
+install(EXPORT VixTargets
+  FILE vix_utilsTargets.cmake
+  NAMESPACE vix::
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vix_utils"
+)
 
 # Examples (opt-in)
 if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
