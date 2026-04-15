@@ -64,7 +64,7 @@ jobs:
         compiler: [clang, gcc]
         header_only: [ON, OFF]
         examples: [ON, OFF]
-        provider: [system, fallback]
+        provider: [system]
 
     steps:
       - name: Checkout utils repository
@@ -76,12 +76,6 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y $DEPS
-
-      - name: Remove system spdlog and fmt for fallback mode
-        if: matrix.provider == 'fallback'
-        run: |
-          sudo apt-get remove -y libspdlog-dev libfmt-dev || true
-          dpkg -l | grep -E 'spdlog|fmt' || true
 
       - name: Select compiler
         run: |
