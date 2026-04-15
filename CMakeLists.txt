@@ -105,42 +105,77 @@ endif()
 # Dependencies: spdlog + fmt
 # Resolution policy:
 #   1) Reuse existing targets if already available
-#   2) Try installed packages via find_package(...)
-#   3) Fail with a clear message if nothing is found
+#   2) Try installed packages via find_package(... CONFIG QUIET)
+#   3) Try pkg-config fallback
+#   4) Fail with a clear message if nothing is found
 #
 # Prefer header-only targets to avoid runtime shared-library ABI issues
 # in released Linux binaries.
 # --------------------------------------------------------------------
+include(FindPkgConfig)
+
 set(_VIX_SPDLOG_TARGET "")
 set(_VIX_FMT_TARGET "")
 
-# Reuse already available spdlog targets first
+# -------------------------
+# spdlog
+# -------------------------
 if (TARGET spdlog::spdlog_header_only)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+
 elseif (TARGET spdlog::spdlog)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+
 else()
   find_package(spdlog CONFIG QUIET)
 
   if (TARGET spdlog::spdlog_header_only)
     set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+
   elseif (TARGET spdlog::spdlog)
     set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+
+  else()
+    pkg_check_modules(PC_SPDLOG QUIET spdlog)
+
+    if (PC_SPDLOG_FOUND)
+      add_library(vix_spdlog_external INTERFACE)
+      target_include_directories(vix_spdlog_external INTERFACE ${PC_SPDLOG_INCLUDE_DIRS})
+      target_link_directories(vix_spdlog_external INTERFACE ${PC_SPDLOG_LIBRARY_DIRS})
+      target_link_libraries(vix_spdlog_external INTERFACE ${PC_SPDLOG_LIBRARIES})
+      set(_VIX_SPDLOG_TARGET vix_spdlog_external)
+    endif()
   endif()
 endif()
 
-# Reuse already available fmt targets first
+# -------------------------
+# fmt
+# -------------------------
 if (TARGET fmt::fmt-header-only)
   set(_VIX_FMT_TARGET fmt::fmt-header-only)
+
 elseif (TARGET fmt::fmt)
   set(_VIX_FMT_TARGET fmt::fmt)
+
 else()
   find_package(fmt CONFIG QUIET)
 
   if (TARGET fmt::fmt-header-only)
     set(_VIX_FMT_TARGET fmt::fmt-header-only)
+
   elseif (TARGET fmt::fmt)
     set(_VIX_FMT_TARGET fmt::fmt)
+
+  else()
+    pkg_check_modules(PC_FMT QUIET fmt)
+
+    if (PC_FMT_FOUND)
+      add_library(vix_fmt_external INTERFACE)
+      target_include_directories(vix_fmt_external INTERFACE ${PC_FMT_INCLUDE_DIRS})
+      target_link_directories(vix_fmt_external INTERFACE ${PC_FMT_LIBRARY_DIRS})
+      target_link_libraries(vix_fmt_external INTERFACE ${PC_FMT_LIBRARIES})
+      set(_VIX_FMT_TARGET vix_fmt_external)
+    endif()
   endif()
 endif()
 
@@ -150,7 +185,8 @@ if (NOT _VIX_SPDLOG_TARGET)
     "Expected one of:\n"
     "  - existing target: spdlog::spdlog_header_only or spdlog::spdlog\n"
     "  - installed package resolvable via find_package(spdlog CONFIG)\n"
-    "Make sure spdlog is installed and visible through CMAKE_PREFIX_PATH or spdlog_DIR."
+    "  - pkg-config package: spdlog\n"
+    "Make sure spdlog is installed and visible through CMAKE_PREFIX_PATH, spdlog_DIR, or pkg-config."
   )
 endif()
 
@@ -160,7 +196,8 @@ if (NOT _VIX_FMT_TARGET)
     "Expected one of:\n"
     "  - existing target: fmt::fmt-header-only or fmt::fmt\n"
     "  - installed package resolvable via find_package(fmt CONFIG)\n"
-    "Make sure fmt is installed and visible through CMAKE_PREFIX_PATH or fmt_DIR."
+    "  - pkg-config package: fmt\n"
+    "Make sure fmt is installed and visible through CMAKE_PREFIX_PATH, fmt_DIR, or pkg-config."
   )
 endif()
 
