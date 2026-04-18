@@ -251,10 +251,10 @@ endif()
 # Build-only helpers must not leak into exported interfaces.
 # --------------------------------------------------------------------
 if (TARGET vix_warnings)
-  if (VIX_HEADER_ONLY)
-    # Do not export build-only warning helpers from header-only package targets.
-  else()
-    target_link_libraries(vix_utils PRIVATE vix_warnings)
+  if (NOT VIX_HEADER_ONLY)
+    target_link_libraries(vix_utils PRIVATE
+      $<BUILD_INTERFACE:vix_warnings>
+    )
   endif()
 else()
   if (VIX_HEADER_ONLY)
@@ -289,10 +289,10 @@ else()
 endif()
 
 if (VIX_ENABLE_SANITIZERS AND TARGET vix_sanitizers)
-  if (VIX_HEADER_ONLY)
-    # Do not export build-only sanitizer helpers from header-only package targets.
-  else()
-    target_link_libraries(vix_utils PRIVATE vix_sanitizers)
+  if (NOT VIX_HEADER_ONLY)
+    target_link_libraries(vix_utils PRIVATE
+      $<BUILD_INTERFACE:vix_sanitizers>
+    )
   endif()
 endif()
 
