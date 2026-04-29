@@ -365,7 +365,10 @@ namespace vix::utils
 
         std::cerr << "\n";
 
-        row(bullet(color), "HTTP:", http_url, false, color);
+        const std::string http_label =
+            (info.scheme == "https") ? "HTTPS:" : "HTTP:";
+
+        row(bullet(color), http_label, http_url, false, color);
 
         if (info.show_ws)
           row(bullet(color), "WS:", ws_url, false, color);
