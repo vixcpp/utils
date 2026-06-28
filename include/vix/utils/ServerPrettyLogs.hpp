@@ -363,8 +363,6 @@ namespace vix::utils
           std::cerr << "\n";
         }
 
-        std::cerr << "\n";
-
         const std::string http_label =
             (info.scheme == "https") ? "HTTPS:" : "HTTP:";
 
@@ -391,7 +389,7 @@ namespace vix::utils
         if (info.show_hints)
           row(info_mark(color), "Hint:", "Ctrl+C to stop the server", true, color);
 
-        std::cerr << "\n";
+        std::cerr << "\r";
         std::cerr.flush();
       }
 
@@ -478,7 +476,7 @@ namespace vix::utils
       out += std::to_string(bg);
       out += "m";
       out += "\033[30m";
-      out += " dev ";
+      out += " dev";
       out += "\033[0m";
 
       return out;
@@ -500,7 +498,7 @@ namespace vix::utils
       out += "\033[1m";
       out += "\033[48;5;238m";
       out += "\033[97m";
-      out += " run ";
+      out += " run";
       out += "\033[0m";
       return out;
     }
@@ -539,13 +537,9 @@ namespace vix::utils
      * @param color Whether color output is enabled.
      * @return Styled icon string.
      */
-    static std::string runtime_icon(const std::string &mode, bool color)
+    static std::string runtime_icon(const std::string &, bool)
     {
-      const bool dev = is_dev_mode(mode);
-      const std::string icon = dev ? "◆" : "●";
-      if (!color)
-        return icon;
-      return wrap("\033[32m", icon, true);
+      return "";
     }
 
     /**
@@ -567,9 +561,8 @@ namespace vix::utils
       if (name == "vix.cpp" || name == "VIX.cpp" || name == "Vix.cpp")
         name = "Vix.cpp";
 
-      const std::string icon = runtime_icon(mode, true);
       const std::string styled = bold(wrap("\033[32m", name, true), true);
-      return icon + " " + styled;
+      return styled;
     }
 
     /**
@@ -889,7 +882,10 @@ namespace vix::utils
      */
     static std::string bullet(bool color)
     {
-      return color ? cyan("›", true) : std::string(">");
+      if (!color)
+        return ">";
+
+      return wrap("\033[36m", ">", true);
     }
 
     /**
@@ -897,7 +893,10 @@ namespace vix::utils
      */
     static std::string info_mark(bool color)
     {
-      return color ? gray("i", true) : "i";
+      if (!color)
+        return "-";
+
+      return wrap("\033[90m", "-", true);
     }
 
     /**
