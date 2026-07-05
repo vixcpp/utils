@@ -552,7 +552,7 @@ namespace vix::utils
      * @param color Whether color output is enabled.
      * @return Styled identity string.
      */
-    static std::string runtime_identity(const std::string &app, const std::string &mode, bool color)
+    static std::string runtime_identity(const std::string &app, const std::string &, bool color)
     {
       if (!color)
         return "[" + app + "]";
