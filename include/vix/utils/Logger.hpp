@@ -293,13 +293,34 @@ namespace vix::utils
         return;
 
       std::shared_ptr<spdlog::logger> spd;
+      Format format = Format::KV;
       {
         std::lock_guard<std::mutex> lock(mutex_);
         spd = spd_;
+        format = format_;
         if (!spd)
           return;
         if (!spd->should_log(toSpdLevel(level)))
           return;
+      }
+
+      if (format == Format::JSON || format == Format::JSON_PRETTY)
+      {
+        const std::string message = fmt::format(fmtstr, std::forward<Args>(args)...);
+        const std::string line = (format == Format::JSON_PRETTY)
+                                     ? buildJsonPretty(level, message)
+                                     : buildJsonLine(level, message);
+
+        if (console_sync_enabled())
+        {
+          vix::utils::console_wait_banner();
+          std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
+          spd->log(toSpdLevel(level), "{}", line);
+          return;
+        }
+
+        spd->log(toSpdLevel(level), "{}", line);
+        return;
       }
 
       if (console_sync_enabled())
@@ -1047,6 +1068,8 @@ namespace vix::utils
     /**
      * @brief Append JSON key/value pairs (single-line JSON).
      */
+    static void appendJsonKV(std::string &) {}
+
     template <typename V, typename... Rest>
     static void appendJsonKV(std::string &out, const char *k, V &&v, Rest &&...rest)
     {

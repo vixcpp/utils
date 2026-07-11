@@ -27,6 +27,7 @@
 
 #include <vix/utils/ConsoleMutex.hpp>
 #include <vix/utils/Env.hpp>
+#include <vix/utils/Logger.hpp>
 
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -325,6 +326,46 @@ namespace vix::utils
     {
       vix::utils::console_reset_banner();
 
+      if (structured_logs_enabled())
+      {
+        const std::string http_url = make_http_url(info);
+        const std::string ws_url = (info.show_ws ? make_ws_url(info) : std::string());
+        auto &logger = vix::utils::Logger::getInstance();
+
+        if (info.show_ws)
+        {
+          logger.logf(
+              vix::utils::Logger::Level::Info,
+              "server_ready",
+              "app", info.app,
+              "version", info.version,
+              "ready_ms", info.ready_ms,
+              "mode", info.mode.empty() ? std::string("run") : info.mode,
+              "status", info.status.empty() ? std::string("ready") : info.status,
+              "http_url", http_url,
+              "ws_url", ws_url,
+              "threads", static_cast<unsigned long long>(info.threads),
+              "max_threads", static_cast<unsigned long long>(info.max_threads));
+        }
+        else
+        {
+          logger.logf(
+              vix::utils::Logger::Level::Info,
+              "server_ready",
+              "app", info.app,
+              "version", info.version,
+              "ready_ms", info.ready_ms,
+              "mode", info.mode.empty() ? std::string("run") : info.mode,
+              "status", info.status.empty() ? std::string("ready") : info.status,
+              "http_url", http_url,
+              "threads", static_cast<unsigned long long>(info.threads),
+              "max_threads", static_cast<unsigned long long>(info.max_threads));
+        }
+
+        vix::utils::console_mark_banner_done();
+        return;
+      }
+
       const bool color = colors_enabled();
       const std::string http_url = make_http_url(info);
       const std::string ws_url = (info.show_ws ? make_ws_url(info) : std::string());
@@ -426,6 +467,23 @@ namespace vix::utils
      *
      * @return True if small animations may be shown.
      */
+    static bool structured_logs_enabled()
+    {
+      const char *raw = vix_getenv("VIX_LOG_FORMAT");
+      if (!raw || !*raw)
+        return false;
+
+      std::string value(raw);
+      for (auto &c : value)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+      return value == "json" ||
+             value == "json-pretty" ||
+             value == "json_pretty" ||
+             value == "pretty-json" ||
+             value == "pretty_json";
+    }
+
     static bool animations_enabled()
     {
       if (const char *no = vix_getenv("VIX_NO_ANIM"); no && *no)
