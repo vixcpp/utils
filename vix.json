@@ -1,12 +1,15 @@
 {
-  "name": "utils",
   "namespace": "vix",
-  "version": "0.1.0",
-  "type": "header-and-source",
-  "include": "include",
-  "src": "src",
+  "name": "utils",
+  "displayName": "Vix Utils",
+  "version": "1.14.7",
+  "type": "library",
   "license": "MIT",
   "description": "General utility components for Vix.cpp: logging, UUID, environment utilities, validation, scope guards, and helper types.",
+  "repository": "https://github.com/vixcpp/utils.git",
+  "documentation": "https://github.com/vixcpp/utils#readme",
+  "include": "include",
+  "standard": "c++20",
   "keywords": [
     "cpp",
     "vix",
@@ -18,11 +21,40 @@
     "helpers",
     "utilities"
   ],
-  "repository": "https://github.com/vixcpp/utils",
   "authors": [
     {
       "name": "Gaspard Kirira",
-      "github": "Gaspardkirira"
+      "github": "GaspardKirira"
     }
-  ]
+  ],
+  "maintainers": [
+    {
+      "name": "Gaspard Kirira",
+      "github": "GaspardKirira"
+    }
+  ],
+  "exports": {
+    "modules": [
+      "vix::utils"
+    ],
+    "namespaces": [
+      "vix::utils"
+    ]
+  },
+  "constraints": {
+    "platforms": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  },
+  "dependencies": {
+    "git": [],
+    "registry": [],
+    "system": [
+      "spdlog",
+      "fmt"
+    ]
+  },
+  "deps": []
 }
