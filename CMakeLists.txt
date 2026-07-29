@@ -61,6 +61,7 @@ option(VIX_STRICT               "Treat warnings as errors"                  OFF)
 option(VIX_ENABLE_LTO           "Enable link-time optimization (Release)"   OFF)
 option(VIX_HEADER_ONLY          "Build vix_utils as header-only INTERFACE"  OFF)
 option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                      OFF)
+option(VIX_UTILS_FETCH_THIRD_PARTY "Auto-fetch spdlog and fmt if not installed" ON)
 
 # --------------------------------------------------------------------
 # Git / Build metadata
@@ -85,7 +86,8 @@ string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 #   1) Reuse existing targets if already available
 #   2) Try installed packages via find_package(... CONFIG QUIET)
 #   3) Try pkg-config fallback
-#   4) Fail with a clear message if nothing is found
+#   4) FetchContent fallback
+#   5) Fail with a clear message if nothing is found
 # --------------------------------------------------------------------
 set(_VIX_SPDLOG_TARGET "")
 set(_VIX_FMT_TARGET "")
@@ -152,6 +154,49 @@ else()
   endif()
 endif()
 
+if ((NOT _VIX_FMT_TARGET OR NOT _VIX_SPDLOG_TARGET) AND VIX_UTILS_FETCH_THIRD_PARTY)
+  include(FetchContent)
+
+  if (NOT _VIX_FMT_TARGET)
+    message(STATUS "[utils] Fetching fmt via FetchContent")
+    set(FMT_DOC OFF CACHE BOOL "" FORCE)
+    set(FMT_TEST OFF CACHE BOOL "" FORCE)
+    set(FMT_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(vix_fmt
+      GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+      GIT_TAG        10.2.1
+    )
+    FetchContent_MakeAvailable(vix_fmt)
+
+    if (TARGET fmt::fmt-header-only)
+      set(_VIX_FMT_TARGET fmt::fmt-header-only)
+    elseif (TARGET fmt::fmt)
+      set(_VIX_FMT_TARGET fmt::fmt)
+    endif()
+  endif()
+
+  if (NOT _VIX_SPDLOG_TARGET)
+    message(STATUS "[utils] Fetching spdlog via FetchContent")
+    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(vix_spdlog
+      GIT_REPOSITORY https://github.com/gabime/spdlog.git
+      GIT_TAG        v1.14.1
+    )
+    FetchContent_MakeAvailable(vix_spdlog)
+
+    if (TARGET spdlog::spdlog_header_only)
+      set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
+    elseif (TARGET spdlog::spdlog)
+      set(_VIX_SPDLOG_TARGET spdlog::spdlog)
+    endif()
+  endif()
+endif()
+
 if (NOT _VIX_SPDLOG_TARGET)
   message(FATAL_ERROR
     "[utils] spdlog not found.\n"
@@ -172,6 +217,16 @@ if (NOT _VIX_FMT_TARGET)
     "  - pkg-config package: fmt\n"
     "Make sure fmt is installed and visible through CMAKE_PREFIX_PATH, fmt_DIR, or pkg-config."
   )
+endif()
+
+set(_VIX_SPDLOG_INSTALL_TARGET spdlog::spdlog_header_only)
+if (_VIX_SPDLOG_TARGET STREQUAL "spdlog::spdlog")
+  set(_VIX_SPDLOG_INSTALL_TARGET spdlog::spdlog)
+endif()
+
+set(_VIX_FMT_INSTALL_TARGET fmt::fmt-header-only)
+if (_VIX_FMT_TARGET STREQUAL "fmt::fmt")
+  set(_VIX_FMT_INSTALL_TARGET fmt::fmt)
 endif()
 
 # --------------------------------------------------------------------
@@ -197,8 +252,10 @@ if (VIX_HEADER_ONLY)
   target_compile_features(vix_utils INTERFACE cxx_std_20)
 
   target_link_libraries(vix_utils INTERFACE
-    ${_VIX_SPDLOG_TARGET}
-    ${_VIX_FMT_TARGET}
+    $<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>
+    $<BUILD_INTERFACE:${_VIX_FMT_TARGET}>
+    $<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>
+    $<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>
   )
 
   if (WIN32)
@@ -237,8 +294,10 @@ else()
 
   target_link_libraries(vix_utils
     PUBLIC
-      ${_VIX_SPDLOG_TARGET}
-      ${_VIX_FMT_TARGET}
+      $<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>
+      $<BUILD_INTERFACE:${_VIX_FMT_TARGET}>
+      $<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>
+      $<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>
   )
 
   if (WIN32)
