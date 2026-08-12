@@ -13,12 +13,17 @@
  */
 #include <vix/utils/Logger.hpp>
 
+#include <vix/utils/ConsoleMutex.hpp>
 #include <spdlog/async.h>
 #include <spdlog/async_logger.h>
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/ansicolor_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 #include <cctype>
+#include <iostream>
+#include <mutex>
 #include <string>
 #include <string_view>
 #ifndef _WIN32
@@ -27,6 +32,13 @@
 
 namespace vix::utils
 {
+  struct Logger::Impl
+  {
+    std::shared_ptr<spdlog::logger> spd;
+    mutable std::mutex mutex;
+    Format format{Format::KV};
+  };
+
   thread_local Logger::Context Logger::tls_ctx_{};
 
   static std::string lower_copy(std::string_view in)
@@ -80,7 +92,13 @@ namespace vix::utils
     setLevel(parseLevelFromEnv(envName, Level::Info));
   }
 
-  Logger::Logger() : spd_(nullptr), mutex_()
+  int Logger::toSpdLevel(Level level) noexcept
+  {
+    switch (level) { case Level::Trace: return static_cast<int>(spdlog::level::trace); case Level::Debug: return static_cast<int>(spdlog::level::debug); case Level::Info: return static_cast<int>(spdlog::level::info); case Level::Warn: return static_cast<int>(spdlog::level::warn); case Level::Error: return static_cast<int>(spdlog::level::err); case Level::Critical: return static_cast<int>(spdlog::level::critical); case Level::Off: return static_cast<int>(spdlog::level::off); }
+    return static_cast<int>(spdlog::level::info);
+  }
+
+  Logger::Logger() : impl_(std::make_unique<Impl>())
   {
     try
     {
@@ -93,16 +111,16 @@ namespace vix::utils
       // %l = level (info/warn/error)
       console_sink->set_pattern("\033[90m%T [vix]\033[0m [%^%l%$] \033[2m%v\033[0m");
 
-      spd_ = std::make_shared<spdlog::logger>(
+      impl_->spd = std::make_shared<spdlog::logger>(
           "vix",
           spdlog::sinks_init_list{console_sink});
       // Default INFO, override with env VIX_LOG_LEVEL
-      auto lvl = toSpdLevel(parseLevelFromEnv("VIX_LOG_LEVEL", Level::Info));
-      spd_->set_level(lvl);
+      auto lvl = static_cast<spdlog::level::level_enum>(toSpdLevel(parseLevelFromEnv("VIX_LOG_LEVEL", Level::Info)));
+      impl_->spd->set_level(lvl);
       setFormatFromEnv("VIX_LOG_FORMAT");
       // flush on warn+ (keep it snappy)
-      spd_->flush_on(spdlog::level::warn);
-      spdlog::set_default_logger(spd_);
+      impl_->spd->flush_on(spdlog::level::warn);
+      spdlog::set_default_logger(impl_->spd);
     }
     catch (const spdlog::spdlog_ex &ex)
     {
@@ -110,27 +128,99 @@ namespace vix::utils
     }
   }
 
+  Logger::~Logger() = default;
+
+  void Logger::setLevel(Level level)
+  {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    if (impl_->spd) impl_->spd->set_level(static_cast<spdlog::level::level_enum>(toSpdLevel(level)));
+  }
+
+  Logger::Format Logger::format() const noexcept
+  {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    return impl_->format;
+  }
+
+  bool Logger::enabled(Level level) const noexcept
+  {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    return impl_->spd && impl_->spd->should_log(
+        static_cast<spdlog::level::level_enum>(toSpdLevel(level)));
+  }
+
+  Logger::Level Logger::level() const noexcept
+  {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    if (!impl_->spd) return Level::Off;
+    switch (impl_->spd->level())
+    {
+    case spdlog::level::trace: return Level::Trace;
+    case spdlog::level::debug: return Level::Debug;
+    case spdlog::level::info: return Level::Info;
+    case spdlog::level::warn: return Level::Warn;
+    case spdlog::level::err: return Level::Error;
+    case spdlog::level::critical: return Level::Critical;
+    default: return Level::Off;
+    }
+  }
+
+  void Logger::emit(Level level, std::string_view message)
+  {
+    const Format output_format = format();
+    if (output_format == Format::JSON_PRETTY)
+    {
+      emitPrepared(level, buildJsonPretty(level, message));
+      return;
+    }
+    if (output_format == Format::JSON)
+    {
+      emitPrepared(level, buildJsonLine(level, message));
+      return;
+    }
+    emitPrepared(level, message);
+  }
+
+  void Logger::emitPrepared(Level level, std::string_view message)
+  {
+    std::shared_ptr<spdlog::logger> logger;
+    {
+      std::lock_guard<std::mutex> lock(impl_->mutex);
+      logger = impl_->spd;
+    }
+    if (!logger || !logger->should_log(static_cast<spdlog::level::level_enum>(toSpdLevel(level)))) return;
+
+    if (console_sync_enabled())
+    {
+      vix::utils::console_wait_banner();
+      std::lock_guard<std::mutex> lock(vix::utils::console_mutex());
+      logger->log(static_cast<spdlog::level::level_enum>(toSpdLevel(level)), "{}", message);
+      return;
+    }
+    logger->log(static_cast<spdlog::level::level_enum>(toSpdLevel(level)), "{}", message);
+  }
+
   void Logger::setPattern(const std::string &pattern)
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!spd_)
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    if (!impl_->spd)
       return;
 
-    for (auto &sink : spd_->sinks())
+    for (auto &sink : impl_->spd->sinks())
       sink->set_pattern(pattern);
   }
 
   void Logger::setAsync(bool enable)
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!spd_)
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    if (!impl_->spd)
       return;
 
     try
     {
-      auto sinks = spd_->sinks();
-      auto lvl = spd_->level();
-      auto flush = spd_->flush_level();
+      auto sinks = impl_->spd->sinks();
+      auto lvl = impl_->spd->level();
+      auto flush = impl_->spd->flush_level();
 
       if (enable)
       {
@@ -147,8 +237,8 @@ namespace vix::utils
         async_logger->set_level(lvl);
         async_logger->flush_on(flush);
 
-        spd_ = async_logger;
-        spdlog::set_default_logger(spd_);
+        impl_->spd = async_logger;
+        spdlog::set_default_logger(impl_->spd);
       }
       else
       {
@@ -160,9 +250,9 @@ namespace vix::utils
         sync_logger->set_level(lvl);
         sync_logger->flush_on(flush);
 
-        spd_ = sync_logger;
-        spdlog::set_default_logger(spd_);
-        spd_->debug("Logger switched to sync mode");
+        impl_->spd = sync_logger;
+        spdlog::set_default_logger(impl_->spd);
+        impl_->spd->debug("Logger switched to sync mode");
       }
     }
     catch (const std::exception &e)
@@ -198,25 +288,25 @@ namespace vix::utils
 
   void Logger::setFormat(Format f)
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    format_ = f;
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->format = f;
 
-    if (!spd_)
+    if (!impl_->spd)
       return;
 
-    if (format_ == Format::JSON || format_ == Format::JSON_PRETTY)
+    if (impl_->format == Format::JSON || impl_->format == Format::JSON_PRETTY)
     {
-      for (auto &sink : spd_->sinks())
+      for (auto &sink : impl_->spd->sinks())
         sink->set_pattern("%v");
 
-      spd_->flush_on(spdlog::level::info);
+      impl_->spd->flush_on(spdlog::level::info);
       return;
     }
 
-    for (auto &sink : spd_->sinks())
+    for (auto &sink : impl_->spd->sinks())
       sink->set_pattern("\033[90m%T [vix]\033[0m [%^%l%$] \033[2m%v\033[0m");
 
-    spd_->flush_on(spdlog::level::warn);
+    impl_->spd->flush_on(spdlog::level::warn);
   }
 
   void Logger::setFormatFromEnv(std::string_view envName)

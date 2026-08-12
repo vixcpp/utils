@@ -87,10 +87,8 @@
 
 #endif
 
-#include <iostream>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -99,19 +97,9 @@
 #include <utility>
 #include <cstdlib>
 
-#include <fmt/ostream.h>
-#include <spdlog/sinks/rotating_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
-
-#include <vix/utils/ConsoleMutex.hpp>
 #include <vix/utils/Env.hpp>
 
-#if defined(SPDLOG_FMT_EXTERNAL)
 #include <fmt/format.h>
-#else
-#include <spdlog/fmt/bundled/format.h>
-#endif
 
 namespace vix::utils
 {
@@ -194,12 +182,7 @@ namespace vix::utils
      *
      * @param level New logging level.
      */
-    void setLevel(Level level)
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (spd_)
-        spd_->set_level(toSpdLevel(level));
-    }
+    void setLevel(Level level);
 
     /**
      * @brief Set the structured output format.
@@ -289,49 +272,9 @@ namespace vix::utils
     template <typename... Args>
     void log(Level level, fmt::format_string<Args...> fmtstr, Args &&...args)
     {
-      if (level == Level::Off)
+      if (level == Level::Off || !enabled(level))
         return;
-
-      std::shared_ptr<spdlog::logger> spd;
-      Format format = Format::KV;
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        spd = spd_;
-        format = format_;
-        if (!spd)
-          return;
-        if (!spd->should_log(toSpdLevel(level)))
-          return;
-      }
-
-      if (format == Format::JSON || format == Format::JSON_PRETTY)
-      {
-        const std::string message = fmt::format(fmtstr, std::forward<Args>(args)...);
-        const std::string line = (format == Format::JSON_PRETTY)
-                                     ? buildJsonPretty(level, message)
-                                     : buildJsonLine(level, message);
-
-        if (console_sync_enabled())
-        {
-          vix::utils::console_wait_banner();
-          std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
-          spd->log(toSpdLevel(level), "{}", line);
-          return;
-        }
-
-        spd->log(toSpdLevel(level), "{}", line);
-        return;
-      }
-
-      if (console_sync_enabled())
-      {
-        vix::utils::console_wait_banner();
-        std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
-        spd->log(toSpdLevel(level), fmtstr, std::forward<Args>(args)...);
-        return;
-      }
-
-      spd->log(toSpdLevel(level), fmtstr, std::forward<Args>(args)...);
+      emit(level, fmt::format(fmtstr, std::forward<Args>(args)...));
     }
 
     /**
@@ -350,32 +293,9 @@ namespace vix::utils
                    fmt::format_string<Args...> fmtstr,
                    Args &&...args)
     {
-      if (level == Level::Off)
+      if (level == Level::Off || !enabled(level))
         return;
-
-      std::shared_ptr<spdlog::logger> spd;
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        spd = spd_;
-        if (!spd)
-          return;
-        if (!spd->should_log(toSpdLevel(level)))
-          return;
-      }
-
-      fmt::memory_buffer buf;
-      fmt::format_to(std::back_inserter(buf), "[{}] ", module);
-      fmt::format_to(std::back_inserter(buf), fmtstr, std::forward<Args>(args)...);
-
-      if (console_sync_enabled())
-      {
-        vix::utils::console_wait_banner();
-        std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
-        spd->log(toSpdLevel(level), "{}", fmt::to_string(buf));
-        return;
-      }
-
-      spd->log(toSpdLevel(level), "{}", fmt::to_string(buf));
+      emit(level, fmt::format("[{}] {}", module, fmt::format(fmtstr, std::forward<Args>(args)...)));
     }
 
     /**
@@ -469,28 +389,17 @@ namespace vix::utils
     template <typename... Args>
     void logf(Level level, const std::string &msg, Args &&...kvpairs)
     {
-      if (level == Level::Off)
+      if (level == Level::Off || !enabled(level))
         return;
-
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (!spd_ || !spd_->should_log(toSpdLevel(level)))
-        return;
-
-      if (console_sync_enabled())
+      const Format output_format = format();
+      if (output_format == Format::JSON_PRETTY)
       {
-        vix::utils::console_wait_banner();
-        std::lock_guard<std::mutex> lk(vix::utils::console_mutex());
-        (void)lk;
-      }
-
-      if (format_ == Format::JSON_PRETTY)
-      {
-        spd_->log(toSpdLevel(level), "{}", buildJsonPretty(level, msg, std::forward<Args>(kvpairs)...));
+        emitPrepared(level, buildJsonPretty(level, msg, std::forward<Args>(kvpairs)...));
         return;
       }
-      if (format_ == Format::JSON)
+      if (output_format == Format::JSON)
       {
-        spd_->log(toSpdLevel(level), "{}", buildJsonLine(level, msg, std::forward<Args>(kvpairs)...));
+        emitPrepared(level, buildJsonLine(level, msg, std::forward<Args>(kvpairs)...));
         return;
       }
 
@@ -505,7 +414,7 @@ namespace vix::utils
       for (const auto &it : c.fields)
         line += " " + it.first + "=" + it.second;
 
-      spd_->log(toSpdLevel(level), "{}", line);
+      emitPrepared(level, line);
     }
 
     /**
@@ -538,74 +447,30 @@ namespace vix::utils
     /**
      * @brief Return the current spdlog level mapped to Logger::Level.
      */
-    Level level() const noexcept
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (!spd_)
-        return Level::Off;
-
-      const auto lvl = spd_->level();
-      if (lvl == spdlog::level::trace)
-        return Level::Trace;
-      if (lvl == spdlog::level::debug)
-        return Level::Debug;
-      if (lvl == spdlog::level::info)
-        return Level::Info;
-      if (lvl == spdlog::level::warn)
-        return Level::Warn;
-      if (lvl == spdlog::level::err)
-        return Level::Error;
-      if (lvl == spdlog::level::critical)
-        return Level::Critical;
-      return Level::Off;
-    }
+    Level level() const noexcept;
 
     /**
      * @brief Check whether the given level is enabled.
      */
-    bool enabled(Level lvl) const noexcept
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (!spd_)
-        return false;
-      return spd_->should_log(toSpdLevel(lvl));
-    }
+    bool enabled(Level lvl) const noexcept;
 
   private:
     /**
      * @brief Private constructor (singleton).
      */
     Logger();
+    ~Logger();
 
     /**
      * @brief Convert Logger::Level to spdlog level.
      */
-    static spdlog::level::level_enum toSpdLevel(Level level) noexcept
-    {
-      switch (level)
-      {
-      case Level::Trace:
-        return spdlog::level::trace;
-      case Level::Debug:
-        return spdlog::level::debug;
-      case Level::Info:
-        return spdlog::level::info;
-      case Level::Warn:
-        return spdlog::level::warn;
-      case Level::Error:
-        return spdlog::level::err;
-      case Level::Critical:
-        return spdlog::level::critical;
-      case Level::Off:
-        return spdlog::level::off;
-      default:
-        return spdlog::level::info;
-      }
-    }
+    struct Impl;
+    static int toSpdLevel(Level level) noexcept;
+    void emit(Level level, std::string_view message);
+    void emitPrepared(Level level, std::string_view message);
+    Format format() const noexcept;
 
-    std::shared_ptr<spdlog::logger> spd_;
-    mutable std::mutex mutex_;
-    Format format_ = Format::KV;
+    std::unique_ptr<Impl> impl_;
 
     /**
      * @brief Thread-local context for the current thread.
