@@ -61,6 +61,7 @@ option(VIX_STRICT               "Treat warnings as errors"                  OFF)
 option(VIX_ENABLE_LTO           "Enable link-time optimization (Release)"   OFF)
 option(VIX_HEADER_ONLY          "Build vix_utils as header-only INTERFACE"  OFF)
 option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                      OFF)
+option(VIX_UTILS_BUILD_TESTS    "Build utils CMake regression tests"        OFF)
 option(VIX_UTILS_FETCH_THIRD_PARTY "Auto-fetch spdlog and fmt if not installed" ON)
 
 # --------------------------------------------------------------------
@@ -91,6 +92,56 @@ string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 # --------------------------------------------------------------------
 set(_VIX_SPDLOG_TARGET "")
 set(_VIX_FMT_TARGET "")
+
+# FetchContent options are cache variables, so Vix's private spdlog setup
+# must not leave configuration behind for a consumer's later add_subdirectory.
+macro(vix_utils_push_spdlog_fetch_options)
+  foreach(_vix_option IN ITEMS
+      SPDLOG_FMT_EXTERNAL SPDLOG_BUILD_EXAMPLE SPDLOG_BUILD_EXAMPLES
+      SPDLOG_BUILD_TESTS SPDLOG_BUILD_BENCH SPDLOG_INSTALL)
+    get_property(_vix_normal_defined VARIABLE ${_vix_option} PROPERTY SET)
+    set(_VIX_UTILS_${_vix_option}_NORMAL_DEFINED ${_vix_normal_defined})
+    if (_vix_normal_defined)
+      set(_VIX_UTILS_${_vix_option}_NORMAL_VALUE "${${_vix_option}}")
+    endif()
+    if (DEFINED CACHE{${_vix_option}})
+      get_property(_VIX_UTILS_${_vix_option}_CACHE_VALUE CACHE ${_vix_option} PROPERTY VALUE)
+      get_property(_VIX_UTILS_${_vix_option}_CACHE_TYPE CACHE ${_vix_option} PROPERTY TYPE)
+      set(_VIX_UTILS_${_vix_option}_CACHE_DEFINED TRUE)
+    else()
+      set(_VIX_UTILS_${_vix_option}_CACHE_DEFINED FALSE)
+    endif()
+  endforeach()
+  set(SPDLOG_FMT_EXTERNAL ON)
+  set(SPDLOG_BUILD_EXAMPLE OFF)
+  set(SPDLOG_BUILD_EXAMPLES OFF)
+  set(SPDLOG_BUILD_TESTS OFF)
+  set(SPDLOG_BUILD_BENCH OFF)
+  set(SPDLOG_INSTALL OFF)
+  set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+  set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
+endmacro()
+
+macro(vix_utils_pop_spdlog_fetch_options)
+  foreach(_vix_option IN ITEMS
+      SPDLOG_FMT_EXTERNAL SPDLOG_BUILD_EXAMPLE SPDLOG_BUILD_EXAMPLES
+      SPDLOG_BUILD_TESTS SPDLOG_BUILD_BENCH SPDLOG_INSTALL)
+    if (_VIX_UTILS_${_vix_option}_NORMAL_DEFINED)
+      set(${_vix_option} "${_VIX_UTILS_${_vix_option}_NORMAL_VALUE}")
+    else()
+      unset(${_vix_option})
+    endif()
+    if (_VIX_UTILS_${_vix_option}_CACHE_DEFINED)
+      set(${_vix_option} "${_VIX_UTILS_${_vix_option}_CACHE_VALUE}" CACHE ${_VIX_UTILS_${_vix_option}_CACHE_TYPE} "" FORCE)
+    else()
+      unset(${_vix_option} CACHE)
+    endif()
+  endforeach()
+endmacro()
 
 # -------------------------
 # spdlog
@@ -177,17 +228,13 @@ if ((NOT _VIX_FMT_TARGET OR NOT _VIX_SPDLOG_TARGET) AND VIX_UTILS_FETCH_THIRD_PA
 
   if (NOT _VIX_SPDLOG_TARGET)
     message(STATUS "[utils] Fetching spdlog via FetchContent")
-    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
-    set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
-    set(SPDLOG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
-    set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
+    vix_utils_push_spdlog_fetch_options()
     FetchContent_Declare(vix_spdlog
       GIT_REPOSITORY https://github.com/gabime/spdlog.git
       GIT_TAG        v1.14.1
     )
     FetchContent_MakeAvailable(vix_spdlog)
+    vix_utils_pop_spdlog_fetch_options()
 
     if (TARGET spdlog::spdlog_header_only)
       set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
@@ -246,15 +293,12 @@ if (VIX_HEADER_ONLY)
   target_compile_definitions(vix_utils INTERFACE
     VIX_GIT_HASH="${VIX_GIT_HASH}"
     VIX_BUILD_DATE="${VIX_BUILD_DATE}"
-    SPDLOG_FMT_EXTERNAL=1
   )
 
   target_compile_features(vix_utils INTERFACE cxx_std_20)
 
   target_link_libraries(vix_utils INTERFACE
-    $<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>
     $<BUILD_INTERFACE:${_VIX_FMT_TARGET}>
-    $<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>
     $<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>
   )
 
@@ -287,6 +331,9 @@ else()
   target_compile_definitions(vix_utils PUBLIC
     VIX_GIT_HASH="${VIX_GIT_HASH}"
     VIX_BUILD_DATE="${VIX_BUILD_DATE}"
+  )
+
+  target_compile_definitions(vix_utils PRIVATE
     SPDLOG_FMT_EXTERNAL=1
   )
 
@@ -294,10 +341,11 @@ else()
 
   target_link_libraries(vix_utils
     PUBLIC
-      $<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>
       $<BUILD_INTERFACE:${_VIX_FMT_TARGET}>
-      $<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>
       $<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>
+    PRIVATE
+      $<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>
+      $<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>
   )
 
   if (WIN32)
@@ -451,6 +499,11 @@ if (VIX_UTILS_BUILD_EXAMPLES AND NOT VIX_HEADER_ONLY)
       utils_validation_demo
       utils_env_time_uuid
   )
+endif()
+
+if (VIX_UTILS_BUILD_TESTS)
+  include(CTest)
+  add_subdirectory(tests)
 endif()
 
 # --------------------------------------------------------------------
