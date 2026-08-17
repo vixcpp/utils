@@ -370,8 +370,8 @@ else()
         -Wall
         -Wextra
         -Wpedantic
-        -Wno-array-bounds
-        -Wno-stringop-overflow
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-array-bounds>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>
       )
     endif()
 
@@ -384,8 +384,8 @@ else()
         -Wall
         -Wextra
         -Wpedantic
-        -Wno-array-bounds
-        -Wno-stringop-overflow
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-array-bounds>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-stringop-overflow>
       )
     endif()
 
