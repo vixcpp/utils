@@ -5,14 +5,14 @@
 ![Status](https://img.shields.io/badge/Status-Stable-success)
 ![spdlog](https://img.shields.io/badge/Logging-spdlog-orange)
 
-> **vix.cpp/utils** — Foundational utility layer for the **Vix.cpp** framework.  
+> **vix.cpp/utils** — Foundational utility layer for the **Vix.cpp** framework.
 > Includes environment management, logging, validation, UUIDs, timestamps, and build metadata.
 
 ---
 
 ## 🚀 Overview
 
-The **Utils module** provides lightweight, reusable helpers used throughout Vix.cpp and standalone C++ apps.  
+The **Utils module** provides lightweight, reusable helpers used throughout Vix.cpp and standalone C++ apps.
 It is designed to simplify configuration, logging, and validation with zero runtime dependencies beyond `spdlog`.
 
 ---
@@ -117,7 +117,7 @@ int main() {
     if (r.is_ok())
         log.log(Logger::Level::INFO, "Validation OK");
     else {
-        log.log(Logger::Level::ERROR, "Validation FAILED:");
+        log.log(Logger::Level::ERROR, "Validation FAILED :");
         for (auto &kv : r.error())
             log.log(Logger::Level::ERROR, " - {} -> {}", kv.first, kv.second);
     }
@@ -171,5 +171,5 @@ cmake --build build -j$(nproc)
 
 ## 🧾 License
 
-**MIT License** © [Gaspard Kirira](https://github.com/gkirira)  
+**MIT License** © [Gaspard Kirira](https://github.com/gkirira)
 See [LICENSE](../../LICENSE) for details.
