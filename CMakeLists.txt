@@ -63,6 +63,10 @@ option(VIX_HEADER_ONLY          "Build vix_utils as header-only INTERFACE"  OFF)
 option(VIX_UTILS_BUILD_EXAMPLES "Build utils examples"                      OFF)
 option(VIX_UTILS_BUILD_TESTS    "Build utils CMake regression tests"        OFF)
 option(VIX_UTILS_FETCH_THIRD_PARTY "Auto-fetch spdlog and fmt if not installed" ON)
+option(VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS
+  "Use FetchContent fmt and spdlog header-only providers for an SDK"
+  OFF
+)
 
 # --------------------------------------------------------------------
 # Git / Build metadata
@@ -92,12 +96,15 @@ string(TIMESTAMP VIX_BUILD_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
 # --------------------------------------------------------------------
 set(_VIX_SPDLOG_TARGET "")
 set(_VIX_FMT_TARGET "")
+set(_VIX_LOGGING_DEPS_BUNDLED OFF)
+set(VIX_UTILS_PACKAGE_WITH_THREADS OFF)
 
 # FetchContent options are cache variables, so Vix's private spdlog setup
 # must not leave configuration behind for a consumer's later add_subdirectory.
 macro(vix_utils_push_spdlog_fetch_options)
   foreach(_vix_option IN ITEMS
-      SPDLOG_FMT_EXTERNAL SPDLOG_BUILD_EXAMPLE SPDLOG_BUILD_EXAMPLES
+      SPDLOG_FMT_EXTERNAL SPDLOG_FMT_EXTERNAL_HO
+      SPDLOG_BUILD_EXAMPLE SPDLOG_BUILD_EXAMPLES
       SPDLOG_BUILD_TESTS SPDLOG_BUILD_BENCH SPDLOG_INSTALL)
     if (DEFINED ${_vix_option})
       set(_VIX_UTILS_${_vix_option}_NORMAL_DEFINED TRUE)
@@ -113,13 +120,25 @@ macro(vix_utils_push_spdlog_fetch_options)
       set(_VIX_UTILS_${_vix_option}_CACHE_DEFINED FALSE)
     endif()
   endforeach()
-  set(SPDLOG_FMT_EXTERNAL ON)
+  if (VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS)
+    set(SPDLOG_FMT_EXTERNAL OFF)
+    set(SPDLOG_FMT_EXTERNAL_HO ON)
+  else()
+    set(SPDLOG_FMT_EXTERNAL ON)
+    set(SPDLOG_FMT_EXTERNAL_HO OFF)
+  endif()
   set(SPDLOG_BUILD_EXAMPLE OFF)
   set(SPDLOG_BUILD_EXAMPLES OFF)
   set(SPDLOG_BUILD_TESTS OFF)
   set(SPDLOG_BUILD_BENCH OFF)
   set(SPDLOG_INSTALL OFF)
-  set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
+  if (VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS)
+    set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_FMT_EXTERNAL_HO ON CACHE BOOL "" FORCE)
+  else()
+    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
+    set(SPDLOG_FMT_EXTERNAL_HO OFF CACHE BOOL "" FORCE)
+  endif()
   set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -147,6 +166,7 @@ endmacro()
 # -------------------------
 # spdlog
 # -------------------------
+if (NOT VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS)
 if (TARGET spdlog::spdlog_header_only)
   set(_VIX_SPDLOG_TARGET spdlog::spdlog_header_only)
 
@@ -175,9 +195,12 @@ else()
   endif()
 endif()
 
+endif()
+
 # -------------------------
 # fmt
 # -------------------------
+if (NOT VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS)
 if (TARGET fmt::fmt-header-only)
   set(_VIX_FMT_TARGET fmt::fmt-header-only)
 
@@ -206,7 +229,10 @@ else()
   endif()
 endif()
 
-if ((NOT _VIX_FMT_TARGET OR NOT _VIX_SPDLOG_TARGET) AND VIX_UTILS_FETCH_THIRD_PARTY)
+endif()
+
+if ((NOT _VIX_FMT_TARGET OR NOT _VIX_SPDLOG_TARGET) AND
+    (VIX_UTILS_FETCH_THIRD_PARTY OR VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS))
   include(FetchContent)
 
   if (NOT _VIX_FMT_TARGET)
@@ -267,6 +293,20 @@ if (NOT _VIX_FMT_TARGET)
   )
 endif()
 
+if (VIX_UTILS_FORCE_BUNDLED_LOGGING_DEPS)
+  if (NOT _VIX_FMT_TARGET STREQUAL "fmt::fmt-header-only" OR
+      NOT _VIX_SPDLOG_TARGET STREQUAL "spdlog::spdlog_header_only")
+    message(FATAL_ERROR
+      "[utils] bundled logging provider requires fmt::fmt-header-only and "
+      "spdlog::spdlog_header_only."
+    )
+  endif()
+
+  set(_VIX_LOGGING_DEPS_BUNDLED ON)
+  set(_VIX_FMT_BUNDLED_INCLUDE_DIR "${vix_fmt_SOURCE_DIR}/include")
+  set(_VIX_SPDLOG_BUNDLED_INCLUDE_DIR "${vix_spdlog_SOURCE_DIR}/include")
+endif()
+
 set(_VIX_SPDLOG_INSTALL_TARGET spdlog::spdlog_header_only)
 if (_VIX_SPDLOG_TARGET STREQUAL "spdlog::spdlog")
   set(_VIX_SPDLOG_INSTALL_TARGET spdlog::spdlog)
@@ -275,6 +315,18 @@ endif()
 set(_VIX_FMT_INSTALL_TARGET fmt::fmt-header-only)
 if (_VIX_FMT_TARGET STREQUAL "fmt::fmt")
   set(_VIX_FMT_INSTALL_TARGET fmt::fmt)
+endif()
+
+set(_VIX_FMT_BUILD_INTERFACE "$<BUILD_INTERFACE:${_VIX_FMT_TARGET}>")
+set(_VIX_FMT_INSTALL_INTERFACE "$<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>")
+set(_VIX_SPDLOG_BUILD_INTERFACE "$<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>")
+set(_VIX_SPDLOG_INSTALL_INTERFACE "$<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>")
+
+if (_VIX_LOGGING_DEPS_BUNDLED)
+  set(_VIX_FMT_BUILD_INTERFACE "")
+  set(_VIX_FMT_INSTALL_INTERFACE "")
+  set(_VIX_SPDLOG_BUILD_INTERFACE "")
+  set(_VIX_SPDLOG_INSTALL_INTERFACE "")
 endif()
 
 # --------------------------------------------------------------------
@@ -291,17 +343,29 @@ if (VIX_HEADER_ONLY)
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
 
+  if (_VIX_LOGGING_DEPS_BUNDLED)
+    target_include_directories(vix_utils INTERFACE
+      $<BUILD_INTERFACE:${_VIX_FMT_BUNDLED_INCLUDE_DIR}>
+    )
+  endif()
+
   target_compile_definitions(vix_utils INTERFACE
     VIX_GIT_HASH="${VIX_GIT_HASH}"
     VIX_BUILD_DATE="${VIX_BUILD_DATE}"
   )
 
+  if (_VIX_LOGGING_DEPS_BUNDLED)
+    target_compile_definitions(vix_utils INTERFACE FMT_HEADER_ONLY=1)
+  endif()
+
   target_compile_features(vix_utils INTERFACE cxx_std_20)
 
-  target_link_libraries(vix_utils INTERFACE
-    $<BUILD_INTERFACE:${_VIX_FMT_TARGET}>
-    $<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>
-  )
+  if (NOT _VIX_LOGGING_DEPS_BUNDLED)
+    target_link_libraries(vix_utils INTERFACE
+      ${_VIX_FMT_BUILD_INTERFACE}
+      ${_VIX_FMT_INSTALL_INTERFACE}
+    )
+  endif()
 
   if (WIN32)
     target_compile_definitions(vix_utils INTERFACE SPDLOG_NO_WIN32_API=1)
@@ -329,10 +393,23 @@ else()
       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
 
+  if (_VIX_LOGGING_DEPS_BUNDLED)
+    target_include_directories(vix_utils
+      PUBLIC
+        $<BUILD_INTERFACE:${_VIX_FMT_BUNDLED_INCLUDE_DIR}>
+      PRIVATE
+        $<BUILD_INTERFACE:${_VIX_SPDLOG_BUNDLED_INCLUDE_DIR}>
+    )
+  endif()
+
   target_compile_definitions(vix_utils PUBLIC
     VIX_GIT_HASH="${VIX_GIT_HASH}"
     VIX_BUILD_DATE="${VIX_BUILD_DATE}"
   )
+
+  if (_VIX_LOGGING_DEPS_BUNDLED)
+    target_compile_definitions(vix_utils PUBLIC FMT_HEADER_ONLY=1)
+  endif()
 
   target_compile_definitions(vix_utils PRIVATE
     SPDLOG_FMT_EXTERNAL=1
@@ -340,19 +417,34 @@ else()
 
   target_compile_features(vix_utils PUBLIC cxx_std_20)
 
-  target_link_libraries(vix_utils
-    PUBLIC
-      $<BUILD_INTERFACE:${_VIX_FMT_TARGET}>
-      $<INSTALL_INTERFACE:${_VIX_FMT_INSTALL_TARGET}>
-    PRIVATE
-      $<BUILD_INTERFACE:${_VIX_SPDLOG_TARGET}>
-      $<INSTALL_INTERFACE:${_VIX_SPDLOG_INSTALL_TARGET}>
-  )
+  if (NOT _VIX_LOGGING_DEPS_BUNDLED)
+    target_link_libraries(vix_utils
+      PUBLIC
+        ${_VIX_FMT_BUILD_INTERFACE}
+        ${_VIX_FMT_INSTALL_INTERFACE}
+      PRIVATE
+        ${_VIX_SPDLOG_BUILD_INTERFACE}
+        ${_VIX_SPDLOG_INSTALL_INTERFACE}
+    )
+  endif()
+
+  if (_VIX_LOGGING_DEPS_BUNDLED)
+    if (NOT TARGET Threads::Threads)
+      find_package(Threads REQUIRED)
+    endif()
+    target_link_libraries(vix_utils PRIVATE Threads::Threads)
+    set(VIX_UTILS_PACKAGE_WITH_THREADS ON)
+  endif()
 
   if (WIN32)
     target_compile_definitions(vix_utils PRIVATE SPDLOG_NO_WIN32_API=1)
   endif()
 endif()
+
+set_property(TARGET vix_utils PROPERTY
+  VIX_LOGGING_DEPS_BUNDLED ${_VIX_LOGGING_DEPS_BUNDLED}
+)
+set(VIX_UTILS_LOGGING_DEPS_BUNDLED ${_VIX_LOGGING_DEPS_BUNDLED})
 
 # --------------------------------------------------------------------
 # Compiler warnings
@@ -440,6 +532,13 @@ else()
   install(TARGETS vix_utils
     EXPORT ${VIX_UTILS_EXPORT_SET}
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
+
+if (_VIX_LOGGING_DEPS_BUNDLED)
+  install(DIRECTORY "${_VIX_FMT_BUNDLED_INCLUDE_DIR}/fmt"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.h"
   )
 endif()
 
