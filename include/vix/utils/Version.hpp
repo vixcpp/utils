@@ -11,8 +11,8 @@
  *  Vix.cpp
  *
  */
-#ifndef VIX_VERSION_HPP
-#define VIX_VERSION_HPP
+#ifndef VIX_UTILS_VERSION_HPP
+#define VIX_UTILS_VERSION_HPP
 
 #include <string>
 #include <string_view>
@@ -79,4 +79,4 @@ namespace vix::utils
   std::string build_info();
 } // namespace vix::utils
 
-#endif // VIX_VERSION_HPP
+#endif // VIX_UTILS_VERSION_HPP

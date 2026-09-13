@@ -11,8 +11,8 @@
  *  Vix.cpp
  *
  */
-#ifndef VIX_ENV_HPP
-#define VIX_ENV_HPP
+#ifndef VIX_UTILS_ENV_HPP
+#define VIX_UTILS_ENV_HPP
 
 #include <string>
 #include <string_view>
@@ -252,4 +252,4 @@ namespace vix::utils
 
 } // namespace Vix::utils
 
-#endif // VIX_ENV_HPP
+#endif // VIX_UTILS_ENV_HPP
