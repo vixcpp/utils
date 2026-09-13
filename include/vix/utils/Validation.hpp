@@ -11,8 +11,8 @@
  *  Vix.cpp
  *
  */
-#ifndef VIX_VALIDATION_HPP
-#define VIX_VALIDATION_HPP
+#ifndef VIX_UTILS_VALIDATION_HPP
+#define VIX_UTILS_VALIDATION_HPP
 
 #include <string>
 #include <string_view>
@@ -272,4 +272,4 @@ namespace vix::utils
 
 } // namespace vix::utils
 
-#endif // VIX_VALIDATION_HPP
+#endif // VIX_UTILS_VALIDATION_HPP
