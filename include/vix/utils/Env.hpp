@@ -1,255 +1,55 @@
 /**
+ * @file Env.hpp
+ * @brief Deprecated Vix2 environment-helper compatibility surface.
  *
- *  @file Env.hpp
- *  @author Gaspard Kirira
- *
- *  Copyright 2025, Gaspard Kirira.  All rights reserved.
- *  https://github.com/vixcpp/vix
- *  Use of this source code is governed by a MIT license
- *  that can be found in the License file.
- *
- *  Vix.cpp
- *
+ * Canonical environment ownership is vix::env. These wrappers preserve the
+ * historical vix::utils call surface without retaining lookup or parsing
+ * policy in utils.
  */
 #ifndef VIX_UTILS_ENV_HPP
 #define VIX_UTILS_ENV_HPP
 
 #include <string>
 #include <string_view>
-#include <cstdlib>
-#include <cctype>
-#include <charconv>
 
-/**
- * @file VIX_ENV_HPP
- * @brief Environment variable helpers for Vix.cpp utilities.
- *
- * This header provides simple, type-safe, and dependency-free functions
- * to read environment variables and convert them into useful types
- * (`std::string`, `bool`, `int`, `unsigned`, and `double`).
- *
- * These functions are:
- *  - Header-only and exception-free
- *  - Whitespace-tolerant (trim leading/trailing spaces)
- *  - Case-insensitive for boolean parsing
- *  - Fail-safe: return a default value on missing or invalid input
- *
- * @code
- * using namespace Vix::utils;
- *
- * std::string db = env_or("DB_URL", "mysql://localhost");
- * bool debug    = env_bool("APP_DEBUG", false);
- * int port      = env_int("PORT", 8080);
- * unsigned thr  = env_uint("WORKERS", 4);
- * double ratio  = env_double("CACHE_RATIO", 0.25);
- * @endcode
- *
- * @note Thread-safe for read-only access.
- * @note Works on POSIX and Windows.
- */
+#include <vix/env/Legacy.hpp>
 
 namespace vix::utils
 {
-  namespace detail
+
+  [[nodiscard]] inline const char *vix_getenv(const char *name) noexcept
   {
-    /**
-     * @brief Converts a character to lowercase (ASCII only).
-     * @param c The input character.
-     * @return Lowercase version of `c`.
-     */
-    inline char to_lower_ascii(unsigned char c) noexcept
-    {
-      return static_cast<char>(std::tolower(c));
-    }
-
-    /**
-     * @brief Performs a case-insensitive comparison between two strings (ASCII only).
-     * @param a First string.
-     * @param b Second string.
-     * @return `true` if equal ignoring case, otherwise `false`.
-     */
-    inline bool iequals(std::string_view a, std::string_view b) noexcept
-    {
-      if (a.size() != b.size())
-        return false;
-      for (std::size_t i = 0; i < a.size(); ++i)
-      {
-        if (to_lower_ascii(static_cast<unsigned char>(a[i])) !=
-            to_lower_ascii(static_cast<unsigned char>(b[i])))
-          return false;
-      }
-      return true;
-    }
-
-    inline std::string_view trim(std::string_view s) noexcept
-    {
-      std::size_t b = 0;
-      std::size_t e = s.size();
-
-      while (b < e && std::isspace(static_cast<unsigned char>(s[b])))
-        ++b;
-      while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1])))
-        --e;
-
-      return std::string_view{s.data() + b, e - b};
-    }
-  } // namespace detail
-
-  static inline const char *vix_getenv(const char *name) noexcept
-  {
-#if defined(_WIN32)
-    // _dupenv_s returns heap memory we must free.
-    static thread_local std::string value;
-    value.clear();
-
-    char *buf = nullptr;
-    size_t len = 0;
-
-    if (_dupenv_s(&buf, &len, name) != 0 || !buf)
-      return nullptr;
-
-    value.assign(buf);
-    free(buf);
-
-    return value.empty() ? nullptr : value.c_str();
-#else
-    return std::getenv(name);
-#endif
+    return vix::env::legacy::getenv(name);
   }
 
-  /**
-   * @brief Returns the value of an environment variable, or a default if not found.
-   *
-   * @param key The environment variable name.
-   * @param def The default value to return if not found.
-   * @return The variable’s value or the default string.
-   *
-   * @code
-   * std::string host = env_or("APP_HOST", "127.0.0.1");
-   * @endcode
-   */
-  inline std::string env_or(std::string_view key, std::string_view def = "")
+  [[nodiscard]] inline std::string env_or(std::string_view key,
+                                          std::string_view fallback = "")
   {
-    const std::string k(key); // stable null-terminated key
-    if (const char *v = vix_getenv(k.c_str()))
-      return std::string(v);
-    return std::string(def);
-  }
-  /**
-   * @brief Reads an environment variable and interprets it as a boolean.
-   *
-   * Recognized truthy values (case-insensitive): `1`, `true`, `yes`, `on`.
-   * Any other value, or missing variable, returns the default.
-   *
-   * @param key The environment variable name.
-   * @param def Default value if missing or invalid.
-   * @return Boolean value derived from the variable.
-   *
-   * @code
-   * bool debug = env_bool("APP_DEBUG", false);
-   * // APP_DEBUG=true → debug == true
-   * // APP_DEBUG=no   → debug == false
-   * @endcode
-   */
-  inline bool env_bool(std::string_view key, bool def = false)
-  {
-    using namespace std::literals;
-    const auto s = env_or(key, def ? "1"sv : "0"sv);
-    const std::string_view v = detail::trim(s);
-
-    return v == "1"sv ||
-           detail::iequals(v, "true") ||
-           detail::iequals(v, "yes") ||
-           detail::iequals(v, "on");
-  }
-  /**
-   * @brief Reads an environment variable as a signed integer (base 10).
-   *
-   * Leading/trailing spaces are trimmed. Returns the default if parsing fails.
-   *
-   * @param key The environment variable name.
-   * @param def Default integer value if missing or invalid.
-   * @return Parsed integer or default.
-   *
-   * @code
-   * int port = env_int("PORT", 8080);
-   * // PORT="9090" → 9090
-   * // PORT="abc"  → 8080
-   * @endcode
-   */
-  inline int env_int(std::string_view key, int def = 0)
-  {
-    const auto s = env_or(key);
-    const std::string_view v = detail::trim(s);
-    if (v.empty())
-      return def;
-
-    int value = def;
-    const auto [ptr, ec] = std::from_chars(v.data(), v.data() + v.size(), value, 10);
-    if (ec != std::errc{} || ptr != v.data() + v.size())
-      return def;
-    return value;
+    return vix::env::legacy::env_or(key, fallback);
   }
 
-  /**
-   * @brief Reads an environment variable as an unsigned integer (base 10).
-   *
-   * Leading/trailing spaces are trimmed. Returns the default if parsing fails
-   * or if the value is negative.
-   *
-   * @param key The environment variable name.
-   * @param def Default unsigned integer if missing or invalid.
-   * @return Parsed unsigned integer or default.
-   *
-   * @code
-   * unsigned threads = env_uint("WORKERS", 4u);
-   * @endcode
-   */
-  inline unsigned env_uint(std::string_view key, unsigned def = 0u)
+  [[nodiscard]] inline bool env_bool(std::string_view key, bool fallback = false)
   {
-    const auto s = env_or(key);
-    const std::string_view v = detail::trim(s);
-    if (v.empty())
-      return def;
-
-    unsigned value = def;
-    const auto [ptr, ec] = std::from_chars(v.data(), v.data() + v.size(), value, 10);
-    if (ec != std::errc{} || ptr != v.data() + v.size())
-      return def;
-    return value;
+    return vix::env::legacy::env_bool(key, fallback);
   }
 
-  /**
-   * @brief Reads an environment variable as a floating-point value.
-   *
-   * Uses `std::strtod` for conversion, supports `.` as decimal separator only.
-   * Returns the default if parsing fails or unparsed characters remain.
-   *
-   * @param key The environment variable name.
-   * @param def Default double value if missing or invalid.
-   * @return Parsed double or default.
-   *
-   * @code
-   * double ratio = env_double("CACHE_RATIO", 0.25);
-   * @endcode
-   */
-  inline double env_double(std::string_view key, double def = 0.0)
+  [[nodiscard]] inline int env_int(std::string_view key, int fallback = 0)
   {
-    const auto s = env_or(key);
-    const std::string_view v = detail::trim(s);
-    if (v.empty())
-      return def;
-
-    const std::string tmp(v); // ensure null-terminated for strtod
-    char *endp = nullptr;
-    const double out = std::strtod(tmp.c_str(), &endp);
-
-    if (!endp || *endp != '\0')
-      return def;
-
-    return out;
+    return vix::env::legacy::env_int(key, fallback);
   }
 
-} // namespace Vix::utils
+  [[nodiscard]] inline unsigned env_uint(std::string_view key,
+                                         unsigned fallback = 0u)
+  {
+    return vix::env::legacy::env_uint(key, fallback);
+  }
+
+  [[nodiscard]] inline double env_double(std::string_view key,
+                                         double fallback = 0.0)
+  {
+    return vix::env::legacy::env_double(key, fallback);
+  }
+
+} // namespace vix::utils
 
 #endif // VIX_UTILS_ENV_HPP
