@@ -23,7 +23,7 @@
 #include <unordered_map>
 
 /**
- * @brief Small string helpers (trim, case transform, prefix/suffix checks, split/join).
+ * @brief Vix2 compatibility string helpers.
  *
  * Header-only utilities designed for performance and clarity:
  *  - In-place-by-value trims (return-by-value for chaining)
@@ -33,6 +33,8 @@
  *
  * @note Whitespace detection uses `std::isspace` in the C locale.
  * @note All functions are exception-free and `noexcept` where applicable.
+ * @note Canonical Vix3 consumers own focused parsing behavior locally. This
+ * header remains only for Vix2 source compatibility.
  */
 
 namespace vix::utils
@@ -391,6 +393,12 @@ namespace vix::utils
     return out;
   }
 
+  /**
+   * @brief Parse a URL query string using the historical Vix2 contract.
+   *
+   * @note This is a Vix2 compatibility API. Canonical HTTP Request parsing
+   * owns its implementation independently and does not depend on vix::utils.
+   */
   inline std::unordered_map<std::string, std::string>
   parse_query_string(std::string_view qs)
   {

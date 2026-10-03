@@ -34,3 +34,81 @@ add_test(
   NAME vix_utils_env_compatibility_regression
   COMMAND vix_utils_env_compatibility_regression
 )
+
+# Preserve the historical generic Result contract independently from the
+# canonical vix::error::Result contract. Validation still relies on this
+# Vix2 compatibility surface.
+add_executable(vix_utils_result_compatibility_regression
+  result_compatibility_regression.cpp
+)
+target_compile_features(vix_utils_result_compatibility_regression PRIVATE cxx_std_20)
+target_link_libraries(vix_utils_result_compatibility_regression PRIVATE vix::utils)
+
+add_test(
+  NAME vix_utils_result_compatibility_regression
+  COMMAND vix_utils_result_compatibility_regression
+)
+
+# Preserve the independent Vix2 string-map validation contract. It must not
+# depend on or redefine the canonical vix::validation capability.
+add_executable(vix_utils_validation_compatibility_regression
+  validation_compatibility_regression.cpp
+)
+target_compile_features(vix_utils_validation_compatibility_regression PRIVATE cxx_std_20)
+target_link_libraries(vix_utils_validation_compatibility_regression PRIVATE vix::utils)
+
+add_test(
+  NAME vix_utils_validation_compatibility_regression
+  COMMAND vix_utils_validation_compatibility_regression
+)
+
+# Preserve the independent Vix2 time helper contract. It intentionally does
+# not depend on or replace the canonical vix::time API.
+add_executable(vix_utils_time_compatibility_regression
+  time_compatibility_regression.cpp
+)
+target_compile_features(vix_utils_time_compatibility_regression PRIVATE cxx_std_20)
+target_link_libraries(vix_utils_time_compatibility_regression PRIVATE vix::utils)
+
+add_test(
+  NAME vix_utils_time_compatibility_regression
+  COMMAND vix_utils_time_compatibility_regression
+)
+
+# Preserve the Vix2 String contract while focused consumers take ownership of
+# their canonical parsing responsibilities independently.
+add_executable(vix_utils_string_compatibility_regression
+  string_compatibility_regression.cpp
+)
+target_compile_features(vix_utils_string_compatibility_regression PRIVATE cxx_std_20)
+target_link_libraries(vix_utils_string_compatibility_regression PRIVATE vix::utils)
+
+add_test(
+  NAME vix_utils_string_compatibility_regression
+  COMMAND vix_utils_string_compatibility_regression
+)
+
+# Preserve the Vix2 server-ready banner contract independently from the
+# canonical HTTP/server startup presentation surface.
+add_executable(vix_utils_server_pretty_logs_compatibility_regression
+  server_pretty_logs_compatibility_regression.cpp
+)
+target_compile_features(vix_utils_server_pretty_logs_compatibility_regression PRIVATE cxx_std_20)
+target_link_libraries(vix_utils_server_pretty_logs_compatibility_regression PRIVATE vix::utils)
+
+add_test(
+  NAME vix_utils_server_pretty_logs_compatibility_regression
+  COMMAND vix_utils_server_pretty_logs_compatibility_regression
+)
+
+# Preserve the Vix2 NetworkError heuristic as compatibility-only behavior.
+add_executable(vix_utils_network_error_compatibility_regression
+  network_error_compatibility_regression.cpp
+)
+target_compile_features(vix_utils_network_error_compatibility_regression PRIVATE cxx_std_20)
+target_link_libraries(vix_utils_network_error_compatibility_regression PRIVATE vix::utils)
+
+add_test(
+  NAME vix_utils_network_error_compatibility_regression
+  COMMAND vix_utils_network_error_compatibility_regression
+)

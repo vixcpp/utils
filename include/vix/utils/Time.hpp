@@ -22,7 +22,13 @@
 #include <cstdint>
 
 /**
- * @brief Time and date utilities (UTC, ISO-8601, RFC-1123, monotonic, UNIX ms).
+ * @brief Vix2 compatibility time and date utilities.
+ *
+ * @note This is a historical Vix2 compatibility surface. It is not the
+ * canonical Vix3 time API. New Vix3 code uses vix::time for Duration,
+ * Timestamp, SystemClock, SteadyClock, Date, and DateTime. This header
+ * intentionally preserves its legacy std::tm, RFC-1123, and unsigned
+ * millisecond helper semantics for existing Vix2 source compatibility.
  *
  * Provides safe and portable utilities for formatting and retrieving
  * timestamps in UTC, as well as high-resolution monotonic clocks for measuring

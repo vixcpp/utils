@@ -26,7 +26,13 @@
 #include "Result.hpp"
 
 /**
- * @brief Lightweight map validation utilities with schema-based rules.
+ * @brief Vix2 compatibility map validation utilities with schema-based rules.
+ *
+ * @note This is a historical Vix2 compatibility contract. It is not the
+ * canonical Vix3 validation API. New Vix3 validation APIs use
+ * vix::validation; this header intentionally preserves the legacy
+ * string-map, first-error-per-field, and utils::Result<void, FieldErrors>
+ * semantics for existing Vix2 source compatibility.
  *
  * Provides a tiny, dependency-free validation layer for string maps
  * (e.g., form submissions, JSON-into-string maps) using a declarative
