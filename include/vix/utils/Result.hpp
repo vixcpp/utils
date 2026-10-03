@@ -23,7 +23,13 @@
 #include <cassert>
 
 /**
- * @brief Generic Result<T, E> type for error handling without exceptions.
+ * @brief Vix2 compatibility Result<T, E> type for error handling without exceptions.
+ *
+ * @note This is a historical Vix2 compatibility abstraction. It is not the
+ * canonical Vix3 Result contract. New Vix3 APIs use vix::error::Result<T>
+ * with vix::error::Error. This header intentionally preserves the legacy
+ * generic-error, tag/factory, and Result<void, E> semantics for existing
+ * Vix2 source compatibility.
  *
  * This header defines a lightweight Result class template inspired by Rust's
  * Result. A Result represents either a success value (Ok) of type `T`, or an
